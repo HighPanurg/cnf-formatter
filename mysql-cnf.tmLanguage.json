@@ -1,0 +1,64 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "MySQL CNF",
+  "scopeName": "source.mysql-cnf",
+  "patterns": [
+    {
+      "name": "comment.line.number-sign.mysql-cnf",
+      "match": "(^|\\s)#.*$"
+    },
+    {
+      "name": "comment.line.semicolon.mysql-cnf",
+      "match": "^\\s*;.*$"
+    },
+    {
+      "name": "meta.section.mysql-cnf",
+      "match": "^\\s*(\\[)([^\\]]+)(\\])",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.section.begin.mysql-cnf"
+        },
+        "2": {
+          "name": "entity.name.section.mysql-cnf"
+        },
+        "3": {
+          "name": "punctuation.definition.section.end.mysql-cnf"
+        }
+      }
+    },
+    {
+      "name": "keyword.control.include.mysql-cnf",
+      "match": "^\\s*!include(?:dir)?\\b.*$"
+    },
+    {
+      "name": "meta.option.mysql-cnf",
+      "match": "^\\s*([A-Za-z0-9_.-]+)(\\s*=)?",
+      "captures": {
+        "1": {
+          "name": "variable.other.option.mysql-cnf"
+        },
+        "2": {
+          "name": "keyword.operator.assignment.mysql-cnf"
+        }
+      }
+    },
+    {
+      "name": "constant.numeric.mysql-cnf",
+      "match": "\\b\\d+(?:[KkMmGgTtPpEe]?B?)?\\b"
+    },
+    {
+      "name": "constant.language.boolean.mysql-cnf",
+      "match": "\\b(?i:on|off|true|false|yes|no)\\b"
+    },
+    {
+      "name": "string.quoted.single.mysql-cnf",
+      "begin": "'",
+      "end": "'"
+    },
+    {
+      "name": "string.quoted.double.mysql-cnf",
+      "begin": "\"",
+      "end": "\""
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+.git/**
+.vscode/**
+.DS_Store
+my.cnf.example
+my.cnf
