@@ -2,7 +2,7 @@
   "name": "mysql-cnf-formatter",
   "displayName": "MySQL CNF Formatter and Linter",
   "description": "Format and lint MySQL my.cnf option files in VS Code.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "HighPanurg",
   "private": false,
   "engines": {
@@ -15,11 +15,13 @@
   ],
   "main": "./extension.js",
   "scripts": {
-    "check": "node --check extension.js"
+    "check": "node --check extension.js",
+    "package:vsix": "mkdir -p dist && npx --yes @vscode/vsce package --out dist/$npm_package_name-$npm_package_version.vsix",
+    "publish:marketplace": "npx --yes @vscode/vsce publish"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-user/mysql-cnf-formatter.git"
+    "url": "https://github.com/HighPanurg/cnf-formatter.git"
   },
   "license": "MIT",
   "contributes": {

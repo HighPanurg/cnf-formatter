@@ -1,5 +1,9 @@
 .git/**
 .vscode/**
+.github/**
 .DS_Store
+dist/**
+node_modules/**
+*.vsix
 my.cnf.example
 my.cnf
