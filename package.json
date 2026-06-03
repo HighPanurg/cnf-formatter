@@ -1,0 +1,122 @@
+{
+  "name": "mysql-cnf-formatter",
+  "displayName": "MySQL CNF Formatter and Linter",
+  "description": "Format and lint MySQL my.cnf option files in VS Code.",
+  "version": "0.0.1",
+  "publisher": "HighPanurg",
+  "private": false,
+  "engines": {
+    "vscode": "^1.88.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Formatters",
+    "Linters"
+  ],
+  "main": "./extension.js",
+  "scripts": {
+    "check": "node --check extension.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-user/mysql-cnf-formatter.git"
+  },
+  "license": "MIT",
+  "contributes": {
+    "languages": [
+      {
+        "id": "mysql-cnf",
+        "aliases": [
+          "MySQL CNF",
+          "my.cnf"
+        ],
+        "extensions": [
+          ".cnf"
+        ],
+        "filenames": [
+          "my.cnf",
+          "my.ini"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "mysql-cnf",
+        "scopeName": "source.mysql-cnf",
+        "path": "./mysql-cnf.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "mysqlCnf.formatDocument",
+        "title": "MySQL CNF: Format Document"
+      },
+      {
+        "command": "mysqlCnf.lintDocument",
+        "title": "MySQL CNF: Lint Document"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "mysqlCnf.formatDocument",
+          "when": "editorLangId == mysql-cnf",
+          "group": "1_modification"
+        },
+        {
+          "command": "mysqlCnf.lintDocument",
+          "when": "editorLangId == mysql-cnf",
+          "group": "2_workspace"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "MySQL CNF",
+      "properties": {
+        "mysqlCnf.format.alignEquals": {
+          "type": "boolean",
+          "default": true,
+          "description": "Align equals signs within contiguous option blocks."
+        },
+        "mysqlCnf.format.inlineCommentColumn": {
+          "type": "number",
+          "default": 48,
+          "minimum": 0,
+          "description": "Preferred column for inline comments. Set to 0 to keep a single separating space."
+        },
+        "mysqlCnf.format.finalNewline": {
+          "type": "boolean",
+          "default": true,
+          "description": "Ensure formatted files end with a newline."
+        },
+        "mysqlCnf.lint.allowTemplatePlaceholders": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow template placeholders such as {{ server_id }} in option values."
+        },
+        "mysqlCnf.lint.warnOnUnknownSections": {
+          "type": "boolean",
+          "default": true,
+          "description": "Warn when a section name is not a common MySQL option group."
+        },
+        "mysqlCnf.lint.allowedSections": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Additional section names to accept without an unknown-section warning."
+        },
+        "mysqlCnf.lint.repeatableOptions": {
+          "type": "array",
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "description": "Additional option names that may appear more than once in the same section."
+        }
+      }
+    }
+  }
+}
