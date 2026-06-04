@@ -22,7 +22,9 @@ npm run package:vsix
 
 ## GitHub Actions Publishing
 
-The workflow in [.github/workflows/vscode-extension.yml](.github/workflows/vscode-extension.yml) packages the extension on pull requests and pushes to `main` or `master`. It publishes to the VS Code Marketplace when you push a version tag such as `v0.0.1`, or when you manually run the workflow with `publish` enabled.
+The workflow in [.github/workflows/vscode-extension.yml](.github/workflows/vscode-extension.yml) packages the extension on pull requests and pushes to `main` or `master`. After a PR is merged, the push to `main` packages the merged code and checks [package.json](package.json). If the package version does not already have a matching tag such as `v0.0.2`, the workflow publishes the VSIX to the VS Code Marketplace, creates that GitHub release tag, and attaches the VSIX to the release.
+
+The workflow also supports publishing from an existing version tag such as `v0.0.2`, or from a manual workflow run with `publish` enabled.
 
 Before publishing:
 
@@ -30,14 +32,18 @@ Before publishing:
 - Create a VS Code Marketplace Personal Access Token.
 - Add that token in GitHub as `Settings` -> `Secrets and variables` -> `Actions` -> `New repository secret` named `VSCE_PAT`.
 
-To publish a new version:
+To publish from a PR, bump the extension version without creating a local git tag:
 
 ```sh
-npm version patch
-git push origin main --follow-tags
+npm version patch --no-git-tag-version
+git add package.json
+git commit -m "Bump extension version"
+git push origin your-branch
 ```
 
-The workflow verifies that the pushed tag, for example `v0.0.2`, matches the version in [package.json](package.json) before publishing.
+Open a PR and merge it into `main`. The merged push creates the release automatically if the matching `vX.Y.Z` tag does not already exist.
+
+If you publish from a tag instead, the workflow verifies that the pushed tag, for example `v0.0.2`, matches the version in [package.json](package.json) before publishing.
 
 ## Commands
 
