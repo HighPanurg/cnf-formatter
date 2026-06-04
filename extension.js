@@ -107,6 +107,781 @@ const SIZE_OPTIONS = new Set([
   "tmp-table-size",
 ]);
 
+const SECTION_HOVER_INFO = new Map([
+  [
+    "client",
+    {
+      description:
+        "Options read by MySQL client programs such as mysql, mysqladmin, and mysqldump.",
+    },
+  ],
+  [
+    "mysql",
+    {
+      description: "Options read by the mysql command-line client.",
+    },
+  ],
+  [
+    "mysqld",
+    {
+      description: "Options read by the MySQL server process.",
+    },
+  ],
+  [
+    "mysqld_safe",
+    {
+      description:
+        "Options read by the mysqld_safe wrapper before it starts the server.",
+    },
+  ],
+  [
+    "mysqldump",
+    {
+      description: "Options read by the mysqldump backup client.",
+    },
+  ],
+  [
+    "isamchk",
+    {
+      description: "Options read by the MyISAM table checking utility.",
+    },
+  ],
+  [
+    "server",
+    {
+      description:
+        "Options shared by server programs that read MySQL option files.",
+    },
+  ],
+  [
+    "client-server",
+    {
+      description: "Options shared by MySQL client and server programs.",
+    },
+  ],
+]);
+
+const OPTION_HOVER_INFO = new Map([
+  [
+    "basedir",
+    {
+      description: "Base directory for the MySQL installation.",
+      valueType: "path",
+    },
+  ],
+  [
+    "binlog-expire-logs-seconds",
+    {
+      description:
+        "Number of seconds before binary log files are eligible for automatic removal.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "binlog-format",
+    {
+      description:
+        "Binary logging format used for replication and point-in-time recovery.",
+      valueType: "ROW, STATEMENT, or MIXED",
+    },
+  ],
+  [
+    "binlog-ignore-db",
+    {
+      description:
+        "Database name to ignore when writing binary log events. This option may be repeated.",
+      valueType: "database name",
+    },
+  ],
+  [
+    "binlog-row-image",
+    {
+      description:
+        "Controls how much row data is written for row-based binary logging.",
+      valueType: "FULL, MINIMAL, or NOBLOB",
+    },
+  ],
+  [
+    "character-set-server",
+    {
+      description:
+        "Default character set used by the server for new schemas and connections.",
+      valueType: "character set name",
+    },
+  ],
+  [
+    "collation-server",
+    {
+      description: "Default collation used with the server character set.",
+      valueType: "collation name",
+    },
+  ],
+  [
+    "datadir",
+    {
+      description: "Directory where the server stores database files.",
+      valueType: "path",
+    },
+  ],
+  [
+    "default-character-set",
+    {
+      description: "Default character set used by a client program.",
+      valueType: "character set name",
+    },
+  ],
+  [
+    "default-storage-engine",
+    {
+      description: "Default storage engine for newly created tables.",
+      valueType: "storage engine name",
+    },
+  ],
+  [
+    "default-tmp-storage-engine",
+    {
+      description:
+        "Default storage engine for internal or explicit temporary tables.",
+      valueType: "storage engine name",
+    },
+  ],
+  [
+    "init-connect",
+    {
+      description:
+        "SQL statement executed for each new client connection, except users with elevated privileges.",
+      valueType: "SQL string",
+    },
+  ],
+  [
+    "innodb-adaptive-hash-index",
+    {
+      description: "Enables or disables the InnoDB adaptive hash index.",
+      valueType: "boolean",
+    },
+  ],
+  [
+    "innodb-autoinc-lock-mode",
+    {
+      description: "Locking mode used by InnoDB for auto-increment values.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "innodb-buffer-pool-instances",
+    {
+      description: "Number of regions used to divide the InnoDB buffer pool.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "innodb-buffer-pool-size",
+    {
+      description:
+        "Amount of memory reserved for caching InnoDB table and index data.",
+      valueType: "size",
+    },
+  ],
+  [
+    "innodb-change-buffer-max-size",
+    {
+      description:
+        "Maximum percentage of the buffer pool that InnoDB may use for the change buffer.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "innodb-change-buffering",
+    {
+      description:
+        "Controls which secondary index changes InnoDB buffers before merging into indexes.",
+      valueType: "mode",
+    },
+  ],
+  [
+    "innodb-checksum-algorithm",
+    {
+      description: "Checksum algorithm used for InnoDB tablespace pages.",
+      valueType: "algorithm name",
+    },
+  ],
+  [
+    "innodb-file-per-table",
+    {
+      description:
+        "Stores each InnoDB table in its own tablespace file when enabled.",
+      valueType: "boolean",
+    },
+  ],
+  [
+    "innodb-flush-log-at-trx-commit",
+    {
+      description:
+        "Controls how often InnoDB flushes redo logs at transaction commit.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "innodb-flush-method",
+    {
+      description:
+        "I/O method InnoDB uses to open and flush data files and log files.",
+      valueType: "method name",
+    },
+  ],
+  [
+    "innodb-io-capacity",
+    {
+      description:
+        "Approximate number of I/O operations per second available to InnoDB background tasks.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "innodb-io-capacity-max",
+    {
+      description:
+        "Upper I/O capacity limit InnoDB can use during bursts of background work.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "innodb-log-buffer-size",
+    {
+      description:
+        "Memory used to buffer InnoDB redo log records before they are written to disk.",
+      valueType: "size",
+    },
+  ],
+  [
+    "innodb-log-file-size",
+    { description: "Size of each InnoDB redo log file.", valueType: "size" },
+  ],
+  [
+    "innodb-lru-scan-depth",
+    {
+      description:
+        "Number of pages scanned by each buffer pool instance during page cleaner work.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "innodb-max-undo-log-size",
+    {
+      description:
+        "Threshold size for truncating undo tablespaces when undo log truncation is enabled.",
+      valueType: "size",
+    },
+  ],
+  [
+    "innodb-monitor-enable",
+    {
+      description: "Enables one or more InnoDB monitor counters.",
+      valueType: "counter name or all",
+    },
+  ],
+  [
+    "innodb-open-files",
+    {
+      description:
+        "Maximum number of files InnoDB can keep open at the same time.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "innodb-page-cleaners",
+    {
+      description: "Number of page cleaner threads used by InnoDB.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "innodb-purge-threads",
+    {
+      description: "Number of background purge threads used by InnoDB.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "innodb-stats-auto-recalc",
+    {
+      description:
+        "Automatically recalculates persistent InnoDB statistics after table changes.",
+      valueType: "boolean",
+    },
+  ],
+  [
+    "innodb-stats-on-metadata",
+    {
+      description:
+        "Controls whether InnoDB refreshes statistics during metadata queries.",
+      valueType: "boolean",
+    },
+  ],
+  [
+    "innodb-stats-persistent",
+    {
+      description:
+        "Stores InnoDB optimizer statistics persistently across server restarts.",
+      valueType: "boolean",
+    },
+  ],
+  [
+    "innodb-stats-persistent-sample-pages",
+    {
+      description:
+        "Number of index pages sampled when calculating persistent InnoDB statistics.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "innodb-sync-spin-loops",
+    {
+      description:
+        "Number of spin waits before InnoDB threads suspend while waiting for mutexes.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "innodb-thread-concurrency",
+    {
+      description:
+        "Limit for the number of threads allowed to enter InnoDB concurrently.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "innodb-undo-log-truncate",
+    {
+      description:
+        "Allows InnoDB undo tablespaces to be truncated when they grow past the configured limit.",
+      valueType: "boolean",
+    },
+  ],
+  [
+    "innodb-use-native-aio",
+    {
+      description:
+        "Uses native asynchronous I/O support when the operating system provides it.",
+      valueType: "boolean",
+    },
+  ],
+  [
+    "jemalloc-profiling",
+    {
+      description:
+        "Enables allocator profiling when the server is built with jemalloc support.",
+      valueType: "boolean",
+    },
+  ],
+  [
+    "key-buffer",
+    {
+      description:
+        "Memory used for MyISAM index blocks by utilities such as isamchk.",
+      valueType: "size",
+    },
+  ],
+  [
+    "key-buffer-size",
+    {
+      description: "Memory used for MyISAM index blocks by the server.",
+      valueType: "size",
+    },
+  ],
+  [
+    "key-cache-division-limit",
+    {
+      description:
+        "Percentage split between warm and hot MyISAM key cache blocks.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "log-bin",
+    {
+      description: "Base name or path for binary log files.",
+      valueType: "path or file base name",
+    },
+  ],
+  [
+    "log-error",
+    { description: "Path to the server error log file.", valueType: "path" },
+  ],
+  [
+    "log-error-verbosity",
+    {
+      description: "Amount of detail written to the error log.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "log-output",
+    {
+      description: "Destination for general and slow query logs.",
+      valueType: "FILE, TABLE, or NONE",
+    },
+  ],
+  [
+    "log-query-errors",
+    {
+      description:
+        "Controls logging of statement errors in compatible MySQL or MariaDB variants.",
+      valueType: "mode",
+    },
+  ],
+  [
+    "log-replica-updates",
+    {
+      description:
+        "Writes replicated updates received by this server to its own binary log.",
+      valueType: "boolean",
+    },
+  ],
+  [
+    "log-slow-admin-statements",
+    {
+      description:
+        "Includes slow administrative statements in the slow query log.",
+      valueType: "boolean",
+    },
+  ],
+  [
+    "log-slow-rate-limit",
+    {
+      description:
+        "Limits how many matching slow queries are written to the slow query log.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "log-slow-rate-type",
+    {
+      description: "Chooses how slow query rate limiting is applied.",
+      valueType: "mode",
+    },
+  ],
+  [
+    "log-slow-replica-statements",
+    {
+      description: "Includes slow replicated statements in the slow query log.",
+      valueType: "boolean",
+    },
+  ],
+  [
+    "log-slow-verbosity",
+    {
+      description: "Controls extra detail included in slow query log entries.",
+      valueType: "mode list",
+    },
+  ],
+  [
+    "long-query-time",
+    {
+      description: "Minimum execution time before a query is considered slow.",
+      valueType: "number of seconds",
+    },
+  ],
+  [
+    "max-allowed-packet",
+    {
+      description: "Maximum packet size accepted by the server or client.",
+      valueType: "size",
+    },
+  ],
+  [
+    "max-binlog-size",
+    {
+      description:
+        "Maximum size of a binary log file before the server rotates to a new file.",
+      valueType: "size",
+    },
+  ],
+  [
+    "max-connections",
+    {
+      description:
+        "Maximum number of simultaneous client connections allowed by the server.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "max-heap-table-size",
+    {
+      description: "Maximum size for user-created MEMORY tables.",
+      valueType: "size",
+    },
+  ],
+  [
+    "myisam-sort-buffer-size",
+    {
+      description: "Buffer size used while sorting MyISAM indexes.",
+      valueType: "size",
+    },
+  ],
+  [
+    "mysql-native-password",
+    {
+      description:
+        "Enables the mysql_native_password authentication plugin where supported.",
+      valueType: "boolean",
+    },
+  ],
+  [
+    "nice",
+    {
+      description:
+        "Scheduling priority adjustment used when starting the server wrapper.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "open-files-limit",
+    {
+      description:
+        "Requested operating system file descriptor limit for the server process.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "performance-schema",
+    {
+      description: "Enables or disables Performance Schema instrumentation.",
+      valueType: "boolean",
+    },
+  ],
+  [
+    "performance-schema-instrument",
+    {
+      description:
+        "Enables, disables, or configures a Performance Schema instrument. This option may be repeated.",
+      valueType: "instrument pattern",
+    },
+  ],
+  [
+    "pid-file",
+    {
+      description: "Path to the file where the server writes its process ID.",
+      valueType: "path",
+    },
+  ],
+  [
+    "port",
+    {
+      description: "TCP/IP port number used by MySQL clients or the server.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "quick",
+    {
+      description:
+        "Streams rows directly instead of buffering complete result sets in memory.",
+      valueType: "flag",
+    },
+  ],
+  [
+    "quote-names",
+    {
+      description: "Quotes database, table, and column names in dump output.",
+      valueType: "flag",
+    },
+  ],
+  [
+    "read-buffer-size",
+    {
+      description: "Per-session buffer used for sequential table scans.",
+      valueType: "size",
+    },
+  ],
+  [
+    "read-rnd-buffer-size",
+    {
+      description:
+        "Per-session buffer used after sorting rows before reading them in sorted order.",
+      valueType: "size",
+    },
+  ],
+  [
+    "relay-log",
+    {
+      description:
+        "Base name or path for relay log files used by replication replicas.",
+      valueType: "path or file base name",
+    },
+  ],
+  [
+    "secure-file-priv",
+    {
+      description:
+        "Restricts import and export operations to a specific directory.",
+      valueType: "path",
+    },
+  ],
+  [
+    "server-id",
+    {
+      description:
+        "Unique numeric identifier for this server in a replication topology.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "skip-external-locking",
+    {
+      description: "Disables external locking for MyISAM tables.",
+      valueType: "flag",
+    },
+  ],
+  [
+    "skip-name-resolve",
+    {
+      description: "Disables DNS host name lookups for client connections.",
+      valueType: "flag",
+    },
+  ],
+  [
+    "slow-query-log",
+    {
+      description:
+        "Enables logging of queries that exceed the configured slow query threshold.",
+      valueType: "boolean",
+    },
+  ],
+  [
+    "slow-query-log-always-write-time",
+    {
+      description:
+        "Writes queries above this time even when slow log rate limiting is active.",
+      valueType: "number of seconds",
+    },
+  ],
+  [
+    "slow-query-log-file",
+    { description: "Path to the slow query log file.", valueType: "path" },
+  ],
+  [
+    "slow-query-log-use-global-control",
+    {
+      description:
+        "Controls which slow query log settings are read from global values.",
+      valueType: "mode list",
+    },
+  ],
+  [
+    "socket",
+    {
+      description: "Unix socket path used for local MySQL connections.",
+      valueType: "path",
+    },
+  ],
+  [
+    "sort-buffer-size",
+    {
+      description: "Per-session buffer used for sort operations.",
+      valueType: "size",
+    },
+  ],
+  [
+    "sync-binlog",
+    {
+      description:
+        "Controls how often the server synchronizes the binary log to disk.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "table-definition-cache",
+    {
+      description: "Number of table definitions the server can cache.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "table-open-cache",
+    {
+      description: "Number of open table objects the server can cache.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "thread-cache-size",
+    {
+      description:
+        "Number of reusable connection threads kept in the thread cache.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "thread-handling",
+    {
+      description: "Thread model used for client connections.",
+      valueType: "mode",
+    },
+  ],
+  [
+    "thread-pool-oversubscribe",
+    {
+      description:
+        "Controls how many additional active threads may run in each thread group.",
+      valueType: "integer",
+    },
+  ],
+  [
+    "thread-stack",
+    {
+      description: "Stack size allocated for each connection thread.",
+      valueType: "size",
+    },
+  ],
+  [
+    "thread-statistics",
+    {
+      description:
+        "Enables per-thread statistics where supported by the server variant.",
+      valueType: "boolean",
+    },
+  ],
+  [
+    "tmp-table-size",
+    {
+      description:
+        "Maximum size for internal in-memory temporary tables before they may be converted to disk tables.",
+      valueType: "size",
+    },
+  ],
+  [
+    "tmpdir",
+    {
+      description: "Directory used for temporary files and temporary tables.",
+      valueType: "path",
+    },
+  ],
+  [
+    "transaction-isolation",
+    {
+      description: "Default transaction isolation level for new sessions.",
+      valueType: "isolation level",
+    },
+  ],
+  [
+    "user",
+    {
+      description:
+        "Operating system user account used to run the server process.",
+      valueType: "user name",
+    },
+  ],
+  [
+    "userstat",
+    {
+      description:
+        "Enables user, client, and table statistics where supported by the server variant.",
+      valueType: "boolean",
+    },
+  ],
+]);
+
 function activate(context) {
   const diagnostics = vscode.languages.createDiagnosticCollection("mysql-cnf");
   context.subscriptions.push(diagnostics);
@@ -122,6 +897,14 @@ function activate(context) {
           document.positionAt(document.getText().length),
         );
         return [vscode.TextEdit.replace(fullRange, formatted)];
+      },
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.languages.registerHoverProvider(selector, {
+      provideHover(document, position) {
+        return provideMysqlCnfHover(document, position);
       },
     }),
   );
@@ -273,7 +1056,7 @@ function formatText(text, options) {
 
   for (const line of lines) {
     const parsed = parseLine(line);
-    if (parsed.type === "option") {
+    if (parsed.type === "option" || parsed.type === "comment") {
       optionBlock.push(parsed);
       continue;
     }
@@ -296,13 +1079,17 @@ function formatOptionBlock(block, options) {
   const keyWidth = options.alignEquals
     ? Math.max(
         ...block
-          .filter((item) => item.hasEquals)
+          .filter((item) => item.type === "option" && item.hasEquals)
           .map((item) => item.key.length),
         0,
       )
     : 0;
 
   return block.map((item) => {
+    if (item.type !== "option") {
+      return formatNonOptionLine(item);
+    }
+
     let base;
     if (item.hasEquals) {
       const separator = options.alignEquals
@@ -368,6 +1155,162 @@ function formatComment(comment) {
   const [, marker, body] = match;
   const normalizedBody = body.trim();
   return normalizedBody ? `${marker} ${normalizedBody}` : marker;
+}
+
+function provideMysqlCnfHover(document, position) {
+  const line = document.lineAt(position.line).text;
+  const target = getHoverTarget(line, position.character);
+  if (!target) {
+    return undefined;
+  }
+
+  const info =
+    target.type === "section"
+      ? getSectionHoverInfo(target.name)
+      : getOptionHoverInfo(target.name);
+
+  if (!info) {
+    return undefined;
+  }
+
+  return new vscode.Hover(
+    createHoverMarkdown(target, info),
+    new vscode.Range(position.line, target.start, position.line, target.end),
+  );
+}
+
+function getHoverTarget(line, character) {
+  const parsed = parseLine(line);
+
+  if (parsed.type === "section") {
+    const sectionStart = line.indexOf("[");
+    const nameStart = line.indexOf(parsed.name, sectionStart + 1);
+    const start = nameStart >= 0 ? nameStart : sectionStart + 1;
+    const end = start + parsed.name.length;
+    if (isCharacterInRange(character, start, end)) {
+      return {
+        type: "section",
+        name: parsed.name,
+        label: `[${parsed.name}]`,
+        start,
+        end,
+      };
+    }
+  }
+
+  if (parsed.type === "option" && parsed.key) {
+    const start = line.indexOf(parsed.key);
+    const end = start + parsed.key.length;
+    if (start >= 0 && isCharacterInRange(character, start, end)) {
+      return {
+        type: "option",
+        name: parsed.key,
+        label: parsed.key,
+        start,
+        end,
+      };
+    }
+  }
+
+  return undefined;
+}
+
+function getSectionHoverInfo(sectionName) {
+  const normalizedSection = normalizeSectionName(sectionName);
+  const exact = SECTION_HOVER_INFO.get(normalizedSection);
+  if (exact) {
+    return exact;
+  }
+
+  if (/^(mysqld|mysql|mariadb|client|server)[-.].+/.test(normalizedSection)) {
+    return {
+      description:
+        "Variant-specific MySQL option group. Programs read this group when they opt into matching suffix groups.",
+    };
+  }
+
+  return {
+    description:
+      "Custom MySQL option group. It is read only by programs configured to use this group name.",
+  };
+}
+
+function getOptionHoverInfo(optionName) {
+  const normalizedOption = normalizeOptionName(optionName);
+  const exact = OPTION_HOVER_INFO.get(normalizedOption);
+  if (exact) {
+    return exact;
+  }
+
+  if (normalizedOption.startsWith("performance-schema-consumer-")) {
+    return {
+      description:
+        "Enables or disables a Performance Schema consumer that stores instrumented events.",
+      valueType: "boolean",
+    };
+  }
+
+  if (normalizedOption.startsWith("loose-")) {
+    return {
+      description:
+        "MySQL option using the loose prefix, so programs that do not recognize it can ignore it instead of failing startup.",
+      valueType: "option value",
+    };
+  }
+
+  if (isBooleanOption(normalizedOption)) {
+    return {
+      description: "Boolean MySQL option.",
+      valueType: "ON, OFF, 1, or 0",
+    };
+  }
+
+  if (INTEGER_OPTIONS.has(normalizedOption)) {
+    return {
+      description: "Numeric MySQL option.",
+      valueType: "integer",
+    };
+  }
+
+  if (SIZE_OPTIONS.has(normalizedOption)) {
+    return {
+      description:
+        "Size-valued MySQL option. MySQL accepts numeric values and common suffixes such as K, M, or G.",
+      valueType: "size",
+    };
+  }
+
+  return {
+    description:
+      "MySQL option. Add a matching entry to OPTION_HOVER_INFO in extension.js to show a more specific description.",
+    valueType: "option value",
+  };
+}
+
+function createHoverMarkdown(target, info) {
+  const markdown = new vscode.MarkdownString();
+  markdown.isTrusted = false;
+  markdown.supportHtml = false;
+
+  markdown.appendMarkdown(`\`${escapeInlineCode(target.label)}\`\n\n`);
+  markdown.appendMarkdown(info.description);
+
+  if (info.valueType) {
+    markdown.appendMarkdown(
+      `\n\nExpected value: \`${escapeInlineCode(info.valueType)}\``,
+    );
+  }
+
+  markdown.appendMarkdown("\n\nSource: MySQL CNF extension");
+  return markdown;
+}
+
+function isCharacterInRange(character, start, end) {
+  return character >= start && character <= end;
+}
+
+function escapeInlineCode(value) {
+  return String(value).replace(/`/g, "'");
 }
 
 function updateDiagnostics(document, collection) {
@@ -825,6 +1768,8 @@ module.exports = {
   activate,
   deactivate,
   formatText,
+  getHoverTarget,
   lintDocument,
   parseLine,
+  provideMysqlCnfHover,
 };
