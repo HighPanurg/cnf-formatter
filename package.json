@@ -2,7 +2,7 @@
   "name": "mysql-cnf-formatter",
   "displayName": "MySQL CNF Formatter and Linter",
   "description": "Format and lint MySQL my.cnf option files in VS Code.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "HighPanurg",
   "private": false,
   "engines": {
