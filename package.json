@@ -2,7 +2,7 @@
   "name": "mysql-cnf-formatter",
   "displayName": "MySQL CNF Formatter and Linter",
   "description": "Format and lint MySQL my.cnf option files in VS Code.",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "HighPanurg",
   "private": false,
   "engines": {
@@ -79,13 +79,13 @@
         "mysqlCnf.format.alignEquals": {
           "type": "boolean",
           "default": true,
-          "description": "Align equals signs within contiguous option blocks."
+          "description": "Align equals signs across option groups separated by blank or comment lines."
         },
         "mysqlCnf.format.inlineCommentColumn": {
           "type": "number",
           "default": 48,
           "minimum": 0,
-          "description": "Preferred column for inline comments. Set to 0 to keep a single separating space."
+          "description": "Minimum preferred column for inline comments. Wider aligned option blocks may push comments further right. Set to 0 to keep a single separating space."
         },
         "mysqlCnf.format.finalNewline": {
           "type": "boolean",

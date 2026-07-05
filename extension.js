@@ -1056,7 +1056,11 @@ function formatText(text, options) {
 
   for (const line of lines) {
     const parsed = parseLine(line);
-    if (parsed.type === "option" || parsed.type === "comment") {
+    if (
+      parsed.type === "option" ||
+      parsed.type === "comment" ||
+      parsed.type === "blank"
+    ) {
       optionBlock.push(parsed);
       continue;
     }
@@ -1085,9 +1089,9 @@ function formatOptionBlock(block, options) {
       )
     : 0;
 
-  return block.map((item) => {
+  const formattedBlock = block.map((item) => {
     if (item.type !== "option") {
-      return formatNonOptionLine(item);
+      return { line: formatNonOptionLine(item) };
     }
 
     let base;
@@ -1100,7 +1104,25 @@ function formatOptionBlock(block, options) {
       base = item.key;
     }
 
-    return appendInlineComment(base, item.comment, options.inlineCommentColumn);
+    return { base, comment: item.comment };
+  });
+
+  const inlineCommentColumn =
+    options.inlineCommentColumn > 0
+      ? Math.max(
+          options.inlineCommentColumn,
+          ...formattedBlock
+            .filter((item) => item.base)
+            .map((item) => item.base.length + 1),
+        )
+      : 0;
+
+  return formattedBlock.map((item) => {
+    if (item.line !== undefined) {
+      return item.line;
+    }
+
+    return appendInlineComment(item.base, item.comment, inlineCommentColumn);
   });
 }
 
