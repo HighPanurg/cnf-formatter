@@ -1112,8 +1112,8 @@ function formatOptionBlock(block, options) {
       ? Math.max(
           options.inlineCommentColumn,
           ...formattedBlock
-            .filter((item) => item.base)
-            .map((item) => item.base.length + 1),
+            .filter((item) => item.base !== undefined)
+            .map((item) => item.base.trimEnd().length + 1),
         )
       : 0;
 
