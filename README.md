@@ -5,7 +5,7 @@ VS Code extension for `my.cnf` and other MySQL option files.
 ## Features
 
 - Registers a `mysql-cnf` language for `.cnf`, `my.cnf`, and `my.ini` files.
-- Formats option files with normalized comments, section headers, spacing, and aligned `=` signs across comment-separated option groups.
+- Formats option files with normalized comments, section headers, spacing, and aligned `=` signs across blank- or comment-separated option groups.
 - Lints malformed sections, unparsable option lines, duplicate non-repeatable options, tabs, trailing whitespace, missing include paths, unknown option groups, and common boolean, integer, and size values.
 - Shows hover descriptions for common MySQL option names and option groups.
 - Allows template placeholders such as `{{ server_id }}` by default for generated configs.
