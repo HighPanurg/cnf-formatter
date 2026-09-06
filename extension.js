@@ -2,885 +2,19 @@ const vscode = require("vscode");
 
 const LANGUAGE_ID = "mysql-cnf";
 
-const DEFAULT_ALLOWED_SECTIONS = [
-  "client",
-  "client-server",
-  "embedded",
-  "isamchk",
-  "mariadb",
-  "myisamchk",
-  "mysql",
-  "mysql.server",
-  "mysqladmin",
-  "mysqlbinlog",
-  "mysqlcheck",
-  "mysqld",
-  "mysqld_safe",
-  "mysqldump",
-  "mysqlimport",
-  "mysqlpump",
-  "mysqlshow",
-  "mysqlslap",
-  "mysqltest",
-  "server",
-];
+const {
+  SECTION_CATALOG,
+  OPTION_CATALOG,
+  normalizeOptionName,
+  getOptionMetadata,
+  getCompatibility,
+  getDocumentationUrl,
+} = require("./option-catalog");
 
-const DEFAULT_REPEATABLE_OPTIONS = [
-  "binlog-do-db",
-  "binlog-ignore-db",
-  "ignore-db-dir",
-  "init-connect",
-  "loose-plugin-load",
-  "performance-schema-instrument",
-  "plugin-load",
-  "plugin-load-add",
-  "replicate-do-db",
-  "replicate-ignore-db",
-  "replicate-wild-do-table",
-  "replicate-wild-ignore-table",
-];
-
-const BOOLEAN_OPTIONS = new Set([
-  "innodb-file-per-table",
-  "innodb-stats-auto-recalc",
-  "innodb-stats-on-metadata",
-  "innodb-stats-persistent",
-  "innodb-undo-log-truncate",
-  "innodb-use-native-aio",
-  "jemalloc-profiling",
-  "log-replica-updates",
-  "log-slow-admin-statements",
-  "log-slow-replica-statements",
-  "mysql-native-password",
-  "performance-schema",
-  "skip-external-locking",
-  "skip-name-resolve",
-  "slow-query-log",
-  "thread-statistics",
-  "userstat",
-]);
-
-const INTEGER_OPTIONS = new Set([
-  "binlog-expire-logs-seconds",
-  "innodb-autoinc-lock-mode",
-  "innodb-change-buffer-max-size",
-  "innodb-flush-log-at-trx-commit",
-  "innodb-io-capacity",
-  "innodb-io-capacity-max",
-  "innodb-lru-scan-depth",
-  "innodb-open-files",
-  "innodb-page-cleaners",
-  "innodb-purge-threads",
-  "innodb-stats-persistent-sample-pages",
-  "innodb-sync-spin-loops",
-  "innodb-thread-concurrency",
-  "key-cache-division-limit",
-  "log-error-verbosity",
-  "log-slow-rate-limit",
-  "nice",
-  "open-files-limit",
-  "port",
-  "server-id",
-  "slow-query-log-always-write-time",
-  "sync-binlog",
-  "table-definition-cache",
-  "table-open-cache",
-  "thread-cache-size",
-  "thread-pool-oversubscribe",
-]);
-
-const SIZE_OPTIONS = new Set([
-  "innodb-buffer-pool-size",
-  "innodb-log-buffer-size",
-  "innodb-log-file-size",
-  "innodb-max-undo-log-size",
-  "key-buffer",
-  "key-buffer-size",
-  "max-allowed-packet",
-  "max-binlog-size",
-  "max-heap-table-size",
-  "myisam-sort-buffer-size",
-  "read-buffer-size",
-  "read-rnd-buffer-size",
-  "sort-buffer-size",
-  "thread-stack",
-  "tmp-table-size",
-]);
-
-const SECTION_HOVER_INFO = new Map([
-  [
-    "client",
-    {
-      description:
-        "Options read by MySQL client programs such as mysql, mysqladmin, and mysqldump.",
-    },
-  ],
-  [
-    "mysql",
-    {
-      description: "Options read by the mysql command-line client.",
-    },
-  ],
-  [
-    "mysqld",
-    {
-      description: "Options read by the MySQL server process.",
-    },
-  ],
-  [
-    "mysqld_safe",
-    {
-      description:
-        "Options read by the mysqld_safe wrapper before it starts the server.",
-    },
-  ],
-  [
-    "mysqldump",
-    {
-      description: "Options read by the mysqldump backup client.",
-    },
-  ],
-  [
-    "isamchk",
-    {
-      description: "Options read by the MyISAM table checking utility.",
-    },
-  ],
-  [
-    "server",
-    {
-      description:
-        "Options shared by server programs that read MySQL option files.",
-    },
-  ],
-  [
-    "client-server",
-    {
-      description: "Options shared by MySQL client and server programs.",
-    },
-  ],
-]);
-
-const OPTION_HOVER_INFO = new Map([
-  [
-    "basedir",
-    {
-      description: "Base directory for the MySQL installation.",
-      valueType: "path",
-    },
-  ],
-  [
-    "binlog-expire-logs-seconds",
-    {
-      description:
-        "Number of seconds before binary log files are eligible for automatic removal.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "binlog-format",
-    {
-      description:
-        "Binary logging format used for replication and point-in-time recovery.",
-      valueType: "ROW, STATEMENT, or MIXED",
-    },
-  ],
-  [
-    "binlog-ignore-db",
-    {
-      description:
-        "Database name to ignore when writing binary log events. This option may be repeated.",
-      valueType: "database name",
-    },
-  ],
-  [
-    "binlog-row-image",
-    {
-      description:
-        "Controls how much row data is written for row-based binary logging.",
-      valueType: "FULL, MINIMAL, or NOBLOB",
-    },
-  ],
-  [
-    "character-set-server",
-    {
-      description:
-        "Default character set used by the server for new schemas and connections.",
-      valueType: "character set name",
-    },
-  ],
-  [
-    "collation-server",
-    {
-      description: "Default collation used with the server character set.",
-      valueType: "collation name",
-    },
-  ],
-  [
-    "datadir",
-    {
-      description: "Directory where the server stores database files.",
-      valueType: "path",
-    },
-  ],
-  [
-    "default-character-set",
-    {
-      description: "Default character set used by a client program.",
-      valueType: "character set name",
-    },
-  ],
-  [
-    "default-storage-engine",
-    {
-      description: "Default storage engine for newly created tables.",
-      valueType: "storage engine name",
-    },
-  ],
-  [
-    "default-tmp-storage-engine",
-    {
-      description:
-        "Default storage engine for internal or explicit temporary tables.",
-      valueType: "storage engine name",
-    },
-  ],
-  [
-    "init-connect",
-    {
-      description:
-        "SQL statement executed for each new client connection, except users with elevated privileges.",
-      valueType: "SQL string",
-    },
-  ],
-  [
-    "innodb-adaptive-hash-index",
-    {
-      description: "Enables or disables the InnoDB adaptive hash index.",
-      valueType: "boolean",
-    },
-  ],
-  [
-    "innodb-autoinc-lock-mode",
-    {
-      description: "Locking mode used by InnoDB for auto-increment values.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "innodb-buffer-pool-instances",
-    {
-      description: "Number of regions used to divide the InnoDB buffer pool.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "innodb-buffer-pool-size",
-    {
-      description:
-        "Amount of memory reserved for caching InnoDB table and index data.",
-      valueType: "size",
-    },
-  ],
-  [
-    "innodb-change-buffer-max-size",
-    {
-      description:
-        "Maximum percentage of the buffer pool that InnoDB may use for the change buffer.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "innodb-change-buffering",
-    {
-      description:
-        "Controls which secondary index changes InnoDB buffers before merging into indexes.",
-      valueType: "mode",
-    },
-  ],
-  [
-    "innodb-checksum-algorithm",
-    {
-      description: "Checksum algorithm used for InnoDB tablespace pages.",
-      valueType: "algorithm name",
-    },
-  ],
-  [
-    "innodb-file-per-table",
-    {
-      description:
-        "Stores each InnoDB table in its own tablespace file when enabled.",
-      valueType: "boolean",
-    },
-  ],
-  [
-    "innodb-flush-log-at-trx-commit",
-    {
-      description:
-        "Controls how often InnoDB flushes redo logs at transaction commit.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "innodb-flush-method",
-    {
-      description:
-        "I/O method InnoDB uses to open and flush data files and log files.",
-      valueType: "method name",
-    },
-  ],
-  [
-    "innodb-io-capacity",
-    {
-      description:
-        "Approximate number of I/O operations per second available to InnoDB background tasks.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "innodb-io-capacity-max",
-    {
-      description:
-        "Upper I/O capacity limit InnoDB can use during bursts of background work.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "innodb-log-buffer-size",
-    {
-      description:
-        "Memory used to buffer InnoDB redo log records before they are written to disk.",
-      valueType: "size",
-    },
-  ],
-  [
-    "innodb-log-file-size",
-    { description: "Size of each InnoDB redo log file.", valueType: "size" },
-  ],
-  [
-    "innodb-lru-scan-depth",
-    {
-      description:
-        "Number of pages scanned by each buffer pool instance during page cleaner work.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "innodb-max-undo-log-size",
-    {
-      description:
-        "Threshold size for truncating undo tablespaces when undo log truncation is enabled.",
-      valueType: "size",
-    },
-  ],
-  [
-    "innodb-monitor-enable",
-    {
-      description: "Enables one or more InnoDB monitor counters.",
-      valueType: "counter name or all",
-    },
-  ],
-  [
-    "innodb-open-files",
-    {
-      description:
-        "Maximum number of files InnoDB can keep open at the same time.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "innodb-page-cleaners",
-    {
-      description: "Number of page cleaner threads used by InnoDB.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "innodb-purge-threads",
-    {
-      description: "Number of background purge threads used by InnoDB.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "innodb-stats-auto-recalc",
-    {
-      description:
-        "Automatically recalculates persistent InnoDB statistics after table changes.",
-      valueType: "boolean",
-    },
-  ],
-  [
-    "innodb-stats-on-metadata",
-    {
-      description:
-        "Controls whether InnoDB refreshes statistics during metadata queries.",
-      valueType: "boolean",
-    },
-  ],
-  [
-    "innodb-stats-persistent",
-    {
-      description:
-        "Stores InnoDB optimizer statistics persistently across server restarts.",
-      valueType: "boolean",
-    },
-  ],
-  [
-    "innodb-stats-persistent-sample-pages",
-    {
-      description:
-        "Number of index pages sampled when calculating persistent InnoDB statistics.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "innodb-sync-spin-loops",
-    {
-      description:
-        "Number of spin waits before InnoDB threads suspend while waiting for mutexes.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "innodb-thread-concurrency",
-    {
-      description:
-        "Limit for the number of threads allowed to enter InnoDB concurrently.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "innodb-undo-log-truncate",
-    {
-      description:
-        "Allows InnoDB undo tablespaces to be truncated when they grow past the configured limit.",
-      valueType: "boolean",
-    },
-  ],
-  [
-    "innodb-use-native-aio",
-    {
-      description:
-        "Uses native asynchronous I/O support when the operating system provides it.",
-      valueType: "boolean",
-    },
-  ],
-  [
-    "jemalloc-profiling",
-    {
-      description:
-        "Enables allocator profiling when the server is built with jemalloc support.",
-      valueType: "boolean",
-    },
-  ],
-  [
-    "key-buffer",
-    {
-      description:
-        "Memory used for MyISAM index blocks by utilities such as isamchk.",
-      valueType: "size",
-    },
-  ],
-  [
-    "key-buffer-size",
-    {
-      description: "Memory used for MyISAM index blocks by the server.",
-      valueType: "size",
-    },
-  ],
-  [
-    "key-cache-division-limit",
-    {
-      description:
-        "Percentage split between warm and hot MyISAM key cache blocks.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "log-bin",
-    {
-      description: "Base name or path for binary log files.",
-      valueType: "path or file base name",
-    },
-  ],
-  [
-    "log-error",
-    { description: "Path to the server error log file.", valueType: "path" },
-  ],
-  [
-    "log-error-verbosity",
-    {
-      description: "Amount of detail written to the error log.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "log-output",
-    {
-      description: "Destination for general and slow query logs.",
-      valueType: "FILE, TABLE, or NONE",
-    },
-  ],
-  [
-    "log-query-errors",
-    {
-      description:
-        "Controls logging of statement errors in compatible MySQL or MariaDB variants.",
-      valueType: "mode",
-    },
-  ],
-  [
-    "log-replica-updates",
-    {
-      description:
-        "Writes replicated updates received by this server to its own binary log.",
-      valueType: "boolean",
-    },
-  ],
-  [
-    "log-slow-admin-statements",
-    {
-      description:
-        "Includes slow administrative statements in the slow query log.",
-      valueType: "boolean",
-    },
-  ],
-  [
-    "log-slow-rate-limit",
-    {
-      description:
-        "Limits how many matching slow queries are written to the slow query log.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "log-slow-rate-type",
-    {
-      description: "Chooses how slow query rate limiting is applied.",
-      valueType: "mode",
-    },
-  ],
-  [
-    "log-slow-replica-statements",
-    {
-      description: "Includes slow replicated statements in the slow query log.",
-      valueType: "boolean",
-    },
-  ],
-  [
-    "log-slow-verbosity",
-    {
-      description: "Controls extra detail included in slow query log entries.",
-      valueType: "mode list",
-    },
-  ],
-  [
-    "long-query-time",
-    {
-      description: "Minimum execution time before a query is considered slow.",
-      valueType: "number of seconds",
-    },
-  ],
-  [
-    "max-allowed-packet",
-    {
-      description: "Maximum packet size accepted by the server or client.",
-      valueType: "size",
-    },
-  ],
-  [
-    "max-binlog-size",
-    {
-      description:
-        "Maximum size of a binary log file before the server rotates to a new file.",
-      valueType: "size",
-    },
-  ],
-  [
-    "max-connections",
-    {
-      description:
-        "Maximum number of simultaneous client connections allowed by the server.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "max-heap-table-size",
-    {
-      description: "Maximum size for user-created MEMORY tables.",
-      valueType: "size",
-    },
-  ],
-  [
-    "myisam-sort-buffer-size",
-    {
-      description: "Buffer size used while sorting MyISAM indexes.",
-      valueType: "size",
-    },
-  ],
-  [
-    "mysql-native-password",
-    {
-      description:
-        "Enables the mysql_native_password authentication plugin where supported.",
-      valueType: "boolean",
-    },
-  ],
-  [
-    "nice",
-    {
-      description:
-        "Scheduling priority adjustment used when starting the server wrapper.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "open-files-limit",
-    {
-      description:
-        "Requested operating system file descriptor limit for the server process.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "performance-schema",
-    {
-      description: "Enables or disables Performance Schema instrumentation.",
-      valueType: "boolean",
-    },
-  ],
-  [
-    "performance-schema-instrument",
-    {
-      description:
-        "Enables, disables, or configures a Performance Schema instrument. This option may be repeated.",
-      valueType: "instrument pattern",
-    },
-  ],
-  [
-    "pid-file",
-    {
-      description: "Path to the file where the server writes its process ID.",
-      valueType: "path",
-    },
-  ],
-  [
-    "port",
-    {
-      description: "TCP/IP port number used by MySQL clients or the server.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "quick",
-    {
-      description:
-        "Streams rows directly instead of buffering complete result sets in memory.",
-      valueType: "flag",
-    },
-  ],
-  [
-    "quote-names",
-    {
-      description: "Quotes database, table, and column names in dump output.",
-      valueType: "flag",
-    },
-  ],
-  [
-    "read-buffer-size",
-    {
-      description: "Per-session buffer used for sequential table scans.",
-      valueType: "size",
-    },
-  ],
-  [
-    "read-rnd-buffer-size",
-    {
-      description:
-        "Per-session buffer used after sorting rows before reading them in sorted order.",
-      valueType: "size",
-    },
-  ],
-  [
-    "relay-log",
-    {
-      description:
-        "Base name or path for relay log files used by replication replicas.",
-      valueType: "path or file base name",
-    },
-  ],
-  [
-    "secure-file-priv",
-    {
-      description:
-        "Restricts import and export operations to a specific directory.",
-      valueType: "path",
-    },
-  ],
-  [
-    "server-id",
-    {
-      description:
-        "Unique numeric identifier for this server in a replication topology.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "skip-external-locking",
-    {
-      description: "Disables external locking for MyISAM tables.",
-      valueType: "flag",
-    },
-  ],
-  [
-    "skip-name-resolve",
-    {
-      description: "Disables DNS host name lookups for client connections.",
-      valueType: "flag",
-    },
-  ],
-  [
-    "slow-query-log",
-    {
-      description:
-        "Enables logging of queries that exceed the configured slow query threshold.",
-      valueType: "boolean",
-    },
-  ],
-  [
-    "slow-query-log-always-write-time",
-    {
-      description:
-        "Writes queries above this time even when slow log rate limiting is active.",
-      valueType: "number of seconds",
-    },
-  ],
-  [
-    "slow-query-log-file",
-    { description: "Path to the slow query log file.", valueType: "path" },
-  ],
-  [
-    "slow-query-log-use-global-control",
-    {
-      description:
-        "Controls which slow query log settings are read from global values.",
-      valueType: "mode list",
-    },
-  ],
-  [
-    "socket",
-    {
-      description: "Unix socket path used for local MySQL connections.",
-      valueType: "path",
-    },
-  ],
-  [
-    "sort-buffer-size",
-    {
-      description: "Per-session buffer used for sort operations.",
-      valueType: "size",
-    },
-  ],
-  [
-    "sync-binlog",
-    {
-      description:
-        "Controls how often the server synchronizes the binary log to disk.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "table-definition-cache",
-    {
-      description: "Number of table definitions the server can cache.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "table-open-cache",
-    {
-      description: "Number of open table objects the server can cache.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "thread-cache-size",
-    {
-      description:
-        "Number of reusable connection threads kept in the thread cache.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "thread-handling",
-    {
-      description: "Thread model used for client connections.",
-      valueType: "mode",
-    },
-  ],
-  [
-    "thread-pool-oversubscribe",
-    {
-      description:
-        "Controls how many additional active threads may run in each thread group.",
-      valueType: "integer",
-    },
-  ],
-  [
-    "thread-stack",
-    {
-      description: "Stack size allocated for each connection thread.",
-      valueType: "size",
-    },
-  ],
-  [
-    "thread-statistics",
-    {
-      description:
-        "Enables per-thread statistics where supported by the server variant.",
-      valueType: "boolean",
-    },
-  ],
-  [
-    "tmp-table-size",
-    {
-      description:
-        "Maximum size for internal in-memory temporary tables before they may be converted to disk tables.",
-      valueType: "size",
-    },
-  ],
-  [
-    "tmpdir",
-    {
-      description: "Directory used for temporary files and temporary tables.",
-      valueType: "path",
-    },
-  ],
-  [
-    "transaction-isolation",
-    {
-      description: "Default transaction isolation level for new sessions.",
-      valueType: "isolation level",
-    },
-  ],
-  [
-    "user",
-    {
-      description:
-        "Operating system user account used to run the server process.",
-      valueType: "user name",
-    },
-  ],
-  [
-    "userstat",
-    {
-      description:
-        "Enables user, client, and table statistics where supported by the server variant.",
-      valueType: "boolean",
-    },
-  ],
-]);
+const DEFAULT_ALLOWED_SECTIONS = [...SECTION_CATALOG.keys()];
+const DEFAULT_REPEATABLE_OPTIONS = [...OPTION_CATALOG]
+  .filter(([, info]) => info.repeatable)
+  .map(([name]) => name);
 
 function activate(context) {
   const diagnostics = vscode.languages.createDiagnosticCollection("mysql-cnf");
@@ -1011,6 +145,7 @@ function getFormatterOptions() {
 function getLintOptions() {
   const config = vscode.workspace.getConfiguration("mysqlCnf");
   return {
+    target: getTargetOptions(config),
     allowTemplatePlaceholders: config.get(
       "lint.allowTemplatePlaceholders",
       true,
@@ -1026,6 +161,13 @@ function getLintOptions() {
       normalizeOptionName,
     ),
     warnOnUnknownSections: config.get("lint.warnOnUnknownSections", true),
+  };
+}
+
+function getTargetOptions(config) {
+  return {
+    flavor: config.get("target.flavor", "generic"),
+    version: config.get("target.version", ""),
   };
 }
 
@@ -1141,7 +283,7 @@ function formatNonOptionLine(parsed) {
 
   if (parsed.type === "include") {
     return appendInlineComment(
-      parsed.main.replace(/\s+/g, " "),
+      parsed.main.replace(/^(!include(?:dir)?)\s+/i, "$1 "),
       parsed.comment,
       0,
     );
@@ -1186,17 +328,20 @@ function provideMysqlCnfHover(document, position) {
     return undefined;
   }
 
+  const targetOptions = getTargetOptions(
+    vscode.workspace.getConfiguration("mysqlCnf", document),
+  );
   const info =
     target.type === "section"
       ? getSectionHoverInfo(target.name)
-      : getOptionHoverInfo(target.name);
+      : getOptionHoverInfo(target.name, targetOptions);
 
   if (!info) {
     return undefined;
   }
 
   return new vscode.Hover(
-    createHoverMarkdown(target, info),
+    createHoverMarkdown(target, info, targetOptions),
     new vscode.Range(position.line, target.start, position.line, target.end),
   );
 }
@@ -1239,7 +384,7 @@ function getHoverTarget(line, character) {
 
 function getSectionHoverInfo(sectionName) {
   const normalizedSection = normalizeSectionName(sectionName);
-  const exact = SECTION_HOVER_INFO.get(normalizedSection);
+  const exact = SECTION_CATALOG.get(normalizedSection);
   if (exact) {
     return exact;
   }
@@ -1257,59 +402,17 @@ function getSectionHoverInfo(sectionName) {
   };
 }
 
-function getOptionHoverInfo(optionName) {
-  const normalizedOption = normalizeOptionName(optionName);
-  const exact = OPTION_HOVER_INFO.get(normalizedOption);
-  if (exact) {
-    return exact;
-  }
-
-  if (normalizedOption.startsWith("performance-schema-consumer-")) {
-    return {
-      description:
-        "Enables or disables a Performance Schema consumer that stores instrumented events.",
-      valueType: "boolean",
-    };
-  }
-
-  if (normalizedOption.startsWith("loose-")) {
-    return {
-      description:
-        "MySQL option using the loose prefix, so programs that do not recognize it can ignore it instead of failing startup.",
-      valueType: "option value",
-    };
-  }
-
-  if (isBooleanOption(normalizedOption)) {
-    return {
-      description: "Boolean MySQL option.",
-      valueType: "ON, OFF, 1, or 0",
-    };
-  }
-
-  if (INTEGER_OPTIONS.has(normalizedOption)) {
-    return {
-      description: "Numeric MySQL option.",
-      valueType: "integer",
-    };
-  }
-
-  if (SIZE_OPTIONS.has(normalizedOption)) {
-    return {
-      description:
-        "Size-valued MySQL option. MySQL accepts numeric values and common suffixes such as K, M, or G.",
-      valueType: "size",
-    };
-  }
-
+function getOptionHoverInfo(optionName, target) {
+  const info = getOptionMetadata(optionName, target);
+  if (info) return info;
   return {
     description:
-      "MySQL option. Add a matching entry to OPTION_HOVER_INFO in extension.js to show a more specific description.",
+      "Custom or uncatalogued database option. Check the documentation for your server or client version.",
     valueType: "option value",
   };
 }
 
-function createHoverMarkdown(target, info) {
+function createHoverMarkdown(target, info, targetOptions = {}) {
   const markdown = new vscode.MarkdownString();
   markdown.isTrusted = false;
   markdown.supportHtml = false;
@@ -1323,6 +426,26 @@ function createHoverMarkdown(target, info) {
     );
   }
 
+  if (info.values)
+    markdown.appendMarkdown(`\n\nAllowed values: ${info.values.join(", ")}`);
+  if (info.minimum !== undefined)
+    markdown.appendMarkdown(`\n\nMinimum: ${info.minimum}`);
+  if (info.maximum !== undefined)
+    markdown.appendMarkdown(`\n\nMaximum: ${info.maximum}`);
+  if (info.repeatable)
+    markdown.appendMarkdown("\n\nMay be repeated in the same option group.");
+  if (target.type === "option") {
+    const compatibility = getCompatibility(info, targetOptions);
+    if (compatibility) markdown.appendMarkdown(`\n\n${compatibility.message}`);
+    if (normalizeOptionName(target.name).startsWith("loose-")) {
+      markdown.appendMarkdown(
+        "\n\nThe loose prefix allows programs to ignore unrecognized options.",
+      );
+    }
+    markdown.appendMarkdown(
+      `\n\n[Documentation](${getDocumentationUrl(target.name, info, targetOptions)})`,
+    );
+  }
   markdown.appendMarkdown("\n\nSource: MySQL CNF extension");
   return markdown;
 }
@@ -1534,6 +657,20 @@ function validateOptionLine(
     seenOptions.set(seenKey, lineIndex);
   }
 
+  const info = getOptionMetadata(parsed.key, options.target);
+  const compatibility = getCompatibility(info, options.target);
+  if (compatibility && !normalizedOption.startsWith("loose-")) {
+    diagnostics.push(
+      createDiagnostic(
+        lineIndex,
+        keyStart,
+        keyEnd,
+        `Option '${parsed.key}': ${compatibility.message}`,
+        vscode.DiagnosticSeverity.Warning,
+        compatibility.code,
+      ),
+    );
+  }
   validateOptionValue(parsed, line, lineIndex, diagnostics, options);
 }
 
@@ -1542,9 +679,10 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
     return;
   }
 
-  const normalizedOption = normalizeOptionName(parsed.key);
+  const info = getOptionMetadata(parsed.key, options.target);
   const value = parsed.value.trim();
-  const valueStart = Math.max(0, line.indexOf(parsed.value));
+  const equalIndex = findUnquotedEqual(line);
+  const valueStart = value ? line.indexOf(value, equalIndex + 1) : equalIndex;
   const valueEnd = valueStart + parsed.value.length;
 
   if (!value) {
@@ -1577,7 +715,7 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
 
   const unquotedValue = stripMatchingQuotes(value);
   if (
-    isBooleanOption(normalizedOption) &&
+    info?.type === "boolean" &&
     !/^(0|1|on|off|true|false|yes|no)$/i.test(unquotedValue)
   ) {
     diagnostics.push(
@@ -1591,7 +729,8 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
     );
   }
 
-  if (INTEGER_OPTIONS.has(normalizedOption) && !/^\d+$/.test(unquotedValue)) {
+  const integerPattern = info?.minimum < 0 ? /^[+-]?\d+$/ : /^\+?\d+$/;
+  if (info?.type === "integer" && !integerPattern.test(unquotedValue)) {
     diagnostics.push(
       createDiagnostic(
         lineIndex,
@@ -1603,10 +742,7 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
     );
   }
 
-  if (
-    SIZE_OPTIONS.has(normalizedOption) &&
-    !/^\d+(?:[KMGTEP]B?|B)?$/i.test(unquotedValue)
-  ) {
+  if (info?.type === "size" && !/^\d+(?:[KMGTEP]B?|B)?$/i.test(unquotedValue)) {
     diagnostics.push(
       createDiagnostic(
         lineIndex,
@@ -1614,6 +750,50 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
         valueEnd,
         `Option '${parsed.key}' usually expects a size such as 256M or 4G.`,
         vscode.DiagnosticSeverity.Warning,
+      ),
+    );
+  }
+
+  if (
+    info?.values &&
+    !info.values.some(
+      (allowed) => allowed.toLowerCase() === unquotedValue.toLowerCase(),
+    )
+  ) {
+    diagnostics.push(
+      createDiagnostic(
+        lineIndex,
+        valueStart,
+        valueEnd,
+        `Option '${parsed.key}' expects one of: ${info.values.join(", ")}.`,
+        vscode.DiagnosticSeverity.Warning,
+        "invalid-enum",
+      ),
+    );
+  }
+
+  let numericValue;
+  if (info?.type === "integer" && integerPattern.test(unquotedValue)) {
+    numericValue = Number(unquotedValue);
+  } else if (info?.type === "size") {
+    const size = /^(\d+)([KMGTEP]?)(?:B)?$/i.exec(unquotedValue);
+    if (size)
+      numericValue =
+        Number(size[1]) *
+        1024 ** (size[2] ? "KMGTPE".indexOf(size[2].toUpperCase()) + 1 : 0);
+  }
+  if (
+    numericValue !== undefined &&
+    (numericValue < info.minimum || numericValue > info.maximum)
+  ) {
+    diagnostics.push(
+      createDiagnostic(
+        lineIndex,
+        valueStart,
+        valueEnd,
+        `Option '${parsed.key}' expects a value ${info.minimum !== undefined ? `>= ${info.minimum}` : ""}${info.minimum !== undefined && info.maximum !== undefined ? " and " : ""}${info.maximum !== undefined ? `<= ${info.maximum}` : ""}${info.type === "size" ? " bytes" : ""}.`,
+        vscode.DiagnosticSeverity.Warning,
+        "out-of-range",
       ),
     );
   }
@@ -1651,11 +831,14 @@ function parseLine(rawLine) {
     };
   }
 
-  if (main.startsWith("[") || main.includes("]")) {
+  if (main.startsWith("[")) {
     return { type: "unknown", text: trimmed, comment: split.comment };
   }
 
   const equalIndex = findUnquotedEqual(main);
+  if ((equalIndex < 0 ? main : main.slice(0, equalIndex)).includes("]")) {
+    return { type: "unknown", text: trimmed, comment: split.comment };
+  }
   if (equalIndex >= 0) {
     return {
       type: "option",
@@ -1682,7 +865,7 @@ function splitInlineComment(text) {
     const character = text[index];
     const previous = index > 0 ? text[index - 1] : "";
 
-    if ((character === "'" || character === '"') && previous !== "\\") {
+    if ((character === "'" || character === '"') && !isEscaped(text, index)) {
       quote = quote === character ? "" : quote || character;
       continue;
     }
@@ -1707,9 +890,8 @@ function findUnquotedEqual(text) {
 
   for (let index = 0; index < text.length; index += 1) {
     const character = text[index];
-    const previous = index > 0 ? text[index - 1] : "";
 
-    if ((character === "'" || character === '"') && previous !== "\\") {
+    if ((character === "'" || character === '"') && !isEscaped(text, index)) {
       quote = quote === character ? "" : quote || character;
       continue;
     }
@@ -1722,12 +904,20 @@ function findUnquotedEqual(text) {
   return -1;
 }
 
-function normalizeLineEndings(text) {
-  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+function isEscaped(text, index) {
+  let backslashes = 0;
+  for (
+    let cursor = index - 1;
+    cursor >= 0 && text[cursor] === "\\";
+    cursor -= 1
+  ) {
+    backslashes += 1;
+  }
+  return backslashes % 2 === 1;
 }
 
-function normalizeOptionName(optionName) {
-  return optionName.trim().toLowerCase().replace(/_/g, "-");
+function normalizeLineEndings(text) {
+  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
 function normalizeSectionName(sectionName) {
@@ -1740,13 +930,6 @@ function isKnownSection(sectionName, allowedSections) {
   }
 
   return /^(mysqld|mysql|mariadb|client|server)[-.].+/.test(sectionName);
-}
-
-function isBooleanOption(optionName) {
-  return (
-    BOOLEAN_OPTIONS.has(optionName) ||
-    optionName.startsWith("performance-schema-consumer-")
-  );
 }
 
 function looksLikeTemplatePlaceholder(value) {
@@ -1776,14 +959,18 @@ function createDiagnostic(
   endCharacter,
   message,
   severity,
+  code,
 ) {
   const start = Math.max(0, startCharacter);
   const end = Math.max(start + 1, endCharacter);
-  return new vscode.Diagnostic(
+  const diagnostic = new vscode.Diagnostic(
     new vscode.Range(lineIndex, start, lineIndex, end),
     message,
     severity,
   );
+  diagnostic.source = "mysql-cnf";
+  diagnostic.code = code;
+  return diagnostic;
 }
 
 module.exports = {
