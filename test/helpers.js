@@ -29,7 +29,7 @@ class Diagnostic {
   }
 }
 
-function loadExtension(overrides = {}) {
+function loadExtension(overrides = {}, timers = {}) {
   const filename = path.join(__dirname, "..", "extension.js");
   const localRequire = createRequire(filename);
   const vscode = {
@@ -45,6 +45,7 @@ function loadExtension(overrides = {}) {
     require: (name) => (name === "vscode" ? vscode : localRequire(name)),
     setTimeout,
     clearTimeout,
+    ...timers,
   };
   vm.runInNewContext(fs.readFileSync(filename, "utf8"), sandbox, { filename });
   return sandbox.module.exports;

@@ -21,12 +21,32 @@ function activate(context) {
   const diagnostics = vscode.languages.createDiagnosticCollection("mysql-cnf");
   context.subscriptions.push(diagnostics);
 
-  const selector = { language: LANGUAGE_ID, scheme: "file" };
+  const selector = { language: LANGUAGE_ID };
+  const pending = new Map();
+  const cancelPending = (document) => {
+    const key = document.uri.toString();
+    clearTimeout(pending.get(key));
+    pending.delete(key);
+  };
+  const lintNow = (document) => {
+    cancelPending(document);
+    if (!document.isClosed && isMysqlCnfDocument(document)) {
+      updateDiagnostics(document, diagnostics);
+    }
+  };
+  context.subscriptions.push({
+    dispose() {
+      for (const timer of pending.values()) clearTimeout(timer);
+      pending.clear();
+    },
+  });
 
   context.subscriptions.push(
     vscode.languages.registerDocumentFormattingEditProvider(selector, {
       provideDocumentFormattingEdits(document) {
-        const formatted = formatText(document.getText(), getFormatterOptions());
+        const text = document.getText();
+        const formatted = formatText(text, getFormatterOptions(document));
+        if (formatted === text) return [];
         const fullRange = new vscode.Range(
           document.positionAt(0),
           document.positionAt(document.getText().length),
@@ -88,7 +108,7 @@ function activate(context) {
         return;
       }
 
-      updateDiagnostics(editor.document, diagnostics);
+      lintNow(editor.document);
       const count = diagnostics.get(editor.document.uri)?.length ?? 0;
       const suffix = count === 1 ? "issue" : "issues";
       vscode.window.showInformationMessage(
@@ -102,15 +122,22 @@ function activate(context) {
   context.subscriptions.push(
     vscode.workspace.onDidOpenTextDocument((document) => {
       if (isMysqlCnfDocument(document)) {
-        updateDiagnostics(document, diagnostics);
+        lintNow(document);
       }
     }),
   );
 
   context.subscriptions.push(
     vscode.workspace.onDidChangeTextDocument((event) => {
-      if (isMysqlCnfDocument(event.document)) {
-        updateDiagnostics(event.document, diagnostics);
+      if (
+        isMysqlCnfDocument(event.document) &&
+        event.contentChanges.length > 0
+      ) {
+        cancelPending(event.document);
+        pending.set(
+          event.document.uri.toString(),
+          setTimeout(() => lintNow(event.document), 250),
+        );
       }
     }),
   );
@@ -118,41 +145,38 @@ function activate(context) {
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument((document) => {
       if (isMysqlCnfDocument(document)) {
-        updateDiagnostics(document, diagnostics);
+        lintNow(document);
       }
     }),
   );
 
   context.subscriptions.push(
     vscode.workspace.onDidCloseTextDocument((document) => {
+      cancelPending(document);
       diagnostics.delete(document.uri);
     }),
   );
 
-  vscode.workspace.textDocuments
-    .filter(isMysqlCnfDocument)
-    .forEach((document) => updateDiagnostics(document, diagnostics));
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      for (const document of vscode.workspace.textDocuments) {
+        if (event.affectsConfiguration("mysqlCnf", document.uri))
+          lintNow(document);
+      }
+    }),
+  );
+
+  vscode.workspace.textDocuments.filter(isMysqlCnfDocument).forEach(lintNow);
 }
 
 function deactivate() {}
 
 function isMysqlCnfDocument(document) {
-  if (!document || document.uri.scheme !== "file") {
-    return false;
-  }
-
-  if (document.languageId === LANGUAGE_ID) {
-    return true;
-  }
-
-  const fileName = document.fileName.split(/[\\/]/).pop().toLowerCase();
-  return (
-    fileName === "my.cnf" || fileName === "my.ini" || fileName.endsWith(".cnf")
-  );
+  return document?.languageId === LANGUAGE_ID;
 }
 
-function getFormatterOptions() {
-  const config = vscode.workspace.getConfiguration("mysqlCnf");
+function getFormatterOptions(document) {
+  const config = vscode.workspace.getConfiguration("mysqlCnf", document);
   return {
     alignEquals: config.get("format.alignEquals", true),
     finalNewline: config.get("format.finalNewline", true),
@@ -163,8 +187,8 @@ function getFormatterOptions() {
   };
 }
 
-function getLintOptions() {
-  const config = vscode.workspace.getConfiguration("mysqlCnf");
+function getLintOptions(document) {
+  const config = vscode.workspace.getConfiguration("mysqlCnf", document);
   return {
     target: getTargetOptions(config),
     allowTemplatePlaceholders: config.get(
@@ -694,7 +718,10 @@ async function reviewDuplicate(uri, lineIndex) {
 }
 
 function updateDiagnostics(document, collection) {
-  collection.set(document.uri, lintDocument(document, getLintOptions()));
+  collection.set(
+    document.uri,
+    lintDocument(document, getLintOptions(document)),
+  );
 }
 
 function lintDocument(document, options) {
