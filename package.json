@@ -2,7 +2,7 @@
   "name": "mysql-cnf-formatter",
   "displayName": "MySQL CNF Formatter and Linter",
   "description": "Format and lint MySQL my.cnf option files in VS Code.",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "publisher": "HighPanurg",
   "private": false,
   "engines": {
@@ -15,7 +15,8 @@
   ],
   "main": "./extension.js",
   "scripts": {
-    "check": "node --check extension.js",
+    "check": "node --check extension.js && node --check option-catalog.js",
+    "test": "node --test test/*.test.js",
     "package:vsix": "mkdir -p dist && npx --yes @vscode/vsce package --out dist/$npm_package_name-$npm_package_version.vsix",
     "publish:marketplace": "npx --yes @vscode/vsce publish"
   },
@@ -76,33 +77,57 @@
     "configuration": {
       "title": "MySQL CNF",
       "properties": {
+        "mysqlCnf.target.flavor": {
+          "type": "string",
+          "enum": [
+            "generic",
+            "mysql",
+            "mariadb"
+          ],
+          "default": "generic",
+          "scope": "resource",
+          "description": "Database family for compatibility warnings and completions. Generic allows vendor-specific options without compatibility warnings."
+        },
+        "mysqlCnf.target.version": {
+          "type": "string",
+          "default": "",
+          "pattern": "^(?:[0-9]+\\.[0-9]+(?:\\.[0-9]+)?)?$",
+          "scope": "resource",
+          "description": "Target version, such as 8.0.30 or 10.11. A missing patch number means .0. Leave empty to disable version-specific warnings."
+        },
         "mysqlCnf.format.alignEquals": {
+          "scope": "resource",
           "type": "boolean",
           "default": true,
           "description": "Align equals signs across option groups separated by blank or comment lines."
         },
         "mysqlCnf.format.inlineCommentColumn": {
+          "scope": "resource",
           "type": "number",
           "default": 48,
           "minimum": 0,
           "description": "Minimum preferred column for inline comments. Wider aligned option blocks may push comments further right. Set to 0 to keep a single separating space."
         },
         "mysqlCnf.format.finalNewline": {
+          "scope": "resource",
           "type": "boolean",
           "default": true,
           "description": "Ensure formatted files end with a newline."
         },
         "mysqlCnf.lint.allowTemplatePlaceholders": {
+          "scope": "resource",
           "type": "boolean",
           "default": true,
           "description": "Allow template placeholders such as {{ server_id }} in option values."
         },
         "mysqlCnf.lint.warnOnUnknownSections": {
+          "scope": "resource",
           "type": "boolean",
           "default": true,
           "description": "Warn when a section name is not a common MySQL option group."
         },
         "mysqlCnf.lint.allowedSections": {
+          "scope": "resource",
           "type": "array",
           "default": [],
           "items": {
@@ -111,6 +136,7 @@
           "description": "Additional section names to accept without an unknown-section warning."
         },
         "mysqlCnf.lint.repeatableOptions": {
+          "scope": "resource",
           "type": "array",
           "default": [],
           "items": {

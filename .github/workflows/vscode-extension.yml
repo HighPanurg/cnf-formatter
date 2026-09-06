@@ -39,6 +39,9 @@ jobs:
       - name: Check extension syntax
         run: npm run check
 
+      - name: Run regression tests
+        run: npm test
+
       - name: Read package version
         id: package-version
         run: |
