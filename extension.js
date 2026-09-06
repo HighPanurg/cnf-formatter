@@ -203,7 +203,7 @@ function getLintOptions(document) {
     repeatableOptions: mergeConfigSet(
       DEFAULT_REPEATABLE_OPTIONS,
       config.get("lint.repeatableOptions", []),
-      normalizeOptionName,
+      (name) => normalizeOptionName(name).replace(/^loose-/, ""),
     ),
     warnOnUnknownSections: config.get("lint.warnOnUnknownSections", true),
   };
@@ -903,12 +903,10 @@ function validateOptionLine(
   }
 
   const normalizedOption = normalizeOptionName(parsed.key);
-  const seenKey = `${currentSection}\u0000${normalizedOption}`;
+  const baseOption = normalizedOption.replace(/^loose-/, "");
+  const seenKey = `${currentSection}\u0000${baseOption}`;
   const firstLine = seenOptions.get(seenKey);
-  if (
-    firstLine !== undefined &&
-    !options.repeatableOptions.has(normalizedOption)
-  ) {
+  if (firstLine !== undefined && !options.repeatableOptions.has(baseOption)) {
     const duplicate = createDiagnostic(
       lineIndex,
       keyStart,

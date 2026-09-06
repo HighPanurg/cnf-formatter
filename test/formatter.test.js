@@ -71,6 +71,38 @@ test("formatting is idempotent and preserves CRLF and option values", () => {
   }
 });
 
+test("duplicate detection canonicalizes loose prefixes and underscore spellings", () => {
+  for (const names of [
+    ["loose-plugin-load-add", "loose-plugin-load-add"],
+    ["plugin-load-add", "loose_plugin_load_add"],
+    ["loose_plugin_load_add", "plugin_load_add"],
+  ]) {
+    const diagnostics = lintDocument(
+      document(`[mysqld]\n${names[0]}=a\n[mysqld]\n${names[1]}=b`),
+      lintOptions,
+    );
+    assert.equal(
+      diagnostics.filter((item) => item.code === "duplicate-option").length,
+      0,
+    );
+  }
+  const diagnostics = lintDocument(
+    document(
+      "[mysqld]\nloose_server_id=1\n[client]\nserver-id=3\n[mysqld]\nserver-id=2",
+    ),
+    lintOptions,
+  );
+  const duplicates = diagnostics.filter(
+    (item) => item.code === "duplicate-option",
+  );
+  assert.equal(duplicates.length, 1);
+  assert.equal(duplicates[0].range.start.line, 5);
+  assert.equal(
+    duplicates[0].relatedInformation[0].location.range.start.line,
+    1,
+  );
+});
+
 test("lint handles templates, empty values and repeated sections", () => {
   const messages = (text, options = lintOptions) =>
     lintDocument(document(text), options).map((item) => item.message);

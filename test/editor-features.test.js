@@ -73,6 +73,32 @@ test("key completions preserve assignments, spelling and repeatable options", ()
   );
 });
 
+test("configured repeatable names are canonicalized for completions and duplicate review", async () => {
+  const settings = { "lint.repeatableOptions": ["loose_server_id"] };
+  const items = completions("[mysqld]\nloose-server-id=1\n", settings);
+  assert.ok(items.some((item) => item.label === "server-id"));
+  const doc = document("[mysqld]\nserver-id=1\nloose_server_id=2");
+  let prompted = false;
+  const extension = loadExtension({
+    workspace: {
+      getConfiguration: () => ({
+        get: (key, fallback) => settings[key] ?? fallback,
+      }),
+      openTextDocument: async () => doc,
+    },
+    window: {
+      showTextDocument: async () => {
+        prompted = true;
+      },
+      showWarningMessage: async () => {
+        prompted = true;
+      },
+    },
+  });
+  await extension.reviewDuplicate(doc.uri, 2);
+  assert.equal(prompted, false);
+});
+
 test("value completions preserve quotes and comments and skip templates", () => {
   const items = completions('[mysqld]\nbinlog-format="RO" # keep', {}, 16);
   const row = items.find((item) => item.label === "ROW");
