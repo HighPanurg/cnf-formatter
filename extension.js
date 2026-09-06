@@ -9,6 +9,7 @@ const {
   getOptionMetadata,
   getCompatibility,
   getDocumentationUrl,
+  isOptionInSection,
 } = require("./option-catalog");
 
 const DEFAULT_ALLOWED_SECTIONS = [...SECTION_CATALOG.keys()];
@@ -44,6 +45,26 @@ function activate(context) {
   );
 
   context.subscriptions.push(
+    vscode.languages.registerCompletionItemProvider(
+      selector,
+      {
+        provideCompletionItems: provideMysqlCnfCompletions,
+      },
+      "[",
+      "=",
+      " ",
+    ),
+    vscode.languages.registerCodeActionsProvider(
+      selector,
+      {
+        provideCodeActions: provideMysqlCnfCodeActions,
+      },
+      { providedCodeActionKinds: [vscode.CodeActionKind.QuickFix] },
+    ),
+    vscode.commands.registerCommand(
+      "mysqlCnf.reviewDuplicate",
+      reviewDuplicate,
+    ),
     vscode.commands.registerCommand("mysqlCnf.formatDocument", async () => {
       const editor = vscode.window.activeTextEditor;
       if (!editor || !isMysqlCnfDocument(editor.document)) {
@@ -458,6 +479,220 @@ function escapeInlineCode(value) {
   return String(value).replace(/`/g, "'");
 }
 
+function provideMysqlCnfCompletions(document, position) {
+  const options = getLintOptions(document);
+  const line = document.lineAt(position.line).text;
+  const prefix = line.slice(0, position.character);
+  const split = splitInlineComment(line);
+  const commentStart = split.comment
+    ? line.indexOf(split.comment, split.main.length)
+    : line.length;
+  if (
+    /^\s*[#;!]/.test(line) ||
+    (split.comment && position.character >= commentStart)
+  )
+    return [];
+  const main = line.slice(0, commentStart);
+
+  let currentSection = "";
+  const used = new Map();
+  const lines = normalizeLineEndings(document.getText()).split("\n");
+  let section = "";
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const parsed = parseLine(lines[lineIndex]);
+    if (parsed.type === "section") section = normalizeSectionName(parsed.name);
+    if (lineIndex === position.line) currentSection = section;
+    if (parsed.type === "option" && lineIndex !== position.line) {
+      if (!used.has(section)) used.set(section, new Set());
+      used
+        .get(section)
+        .add(normalizeOptionName(parsed.key).replace(/^loose-/, ""));
+    }
+  }
+
+  if (/^\s*\[[^\]]*$/.test(prefix) || (!currentSection && /^\s*$/.test(line))) {
+    const opening = line.indexOf("[");
+    const closing = line.indexOf("]", opening + 1);
+    const start = opening < 0 ? position.character : opening + 1;
+    const end = closing < 0 ? main.trimEnd().length : closing + 1;
+    return [...options.allowedSections]
+      .filter((name) => /^[A-Za-z0-9_.-]+$/.test(name))
+      .map((name) => {
+        const item = new vscode.CompletionItem(
+          name,
+          vscode.CompletionItemKind.Module,
+        );
+        item.insertText = `${opening < 0 ? "[" : ""}${name}]`;
+        item.range = new vscode.Range(
+          position.line,
+          start,
+          position.line,
+          Math.max(start, end),
+        );
+        item.documentation = createHoverMarkdown(
+          { type: "section", name, label: `[${name}]` },
+          getSectionHoverInfo(name),
+        );
+        return item;
+      });
+  }
+
+  if (!currentSection || /^\s*\[/.test(line)) return [];
+  const equalIndex = findUnquotedEqual(main);
+  if (equalIndex >= 0 && position.character > equalIndex) {
+    const key = main.slice(0, equalIndex).trim();
+    const info = getOptionMetadata(key, options.target);
+    const compatibility = getCompatibility(info, options.target);
+    if (!info || (compatibility && compatibility.code !== "deprecated-option"))
+      return [];
+    const rawValue = main.slice(equalIndex + 1).trim();
+    if (/{{|<%/.test(rawValue)) return [];
+    let start =
+      equalIndex +
+      1 +
+      (main.slice(equalIndex + 1).match(/^\s*/)?.[0].length || 0);
+    let end = Math.max(start, main.trimEnd().length);
+    if (rawValue.startsWith('"') || rawValue.startsWith("'")) {
+      start += 1;
+      end = Math.max(start, end);
+      if (
+        rawValue.length > 1 &&
+        rawValue.at(-1) === rawValue[0] &&
+        !isEscaped(rawValue, rawValue.length - 1)
+      )
+        end -= 1;
+    }
+    if (position.character < start || position.character > end) return [];
+    const values =
+      info.values || (info.type === "boolean" ? ["ON", "OFF", "1", "0"] : []);
+    return values.map((value) => {
+      const item = new vscode.CompletionItem(
+        value,
+        vscode.CompletionItemKind.Value,
+      );
+      item.range = new vscode.Range(position.line, start, position.line, end);
+      item.documentation = createHoverMarkdown(
+        { type: "option", name: key, label: key },
+        info,
+        options.target,
+      );
+      return item;
+    });
+  }
+
+  const keyMatch = /^\s*([A-Za-z0-9_.-]*)/.exec(line);
+  if (!keyMatch || !/^\s*[A-Za-z0-9_.-]*$/.test(prefix)) return [];
+  const keyStart = keyMatch[0].length - keyMatch[1].length;
+  if (position.character < keyStart) return [];
+  const loose = normalizeOptionName(keyMatch[1]).startsWith("loose-");
+  return [...OPTION_CATALOG].flatMap(([name]) => {
+    if (name.startsWith("loose-")) return [];
+    const info = getOptionMetadata(name, options.target);
+    const compatibility = getCompatibility(info, options.target);
+    if (
+      !isOptionInSection(info, currentSection) ||
+      (compatibility && compatibility.code !== "deprecated-option")
+    )
+      return [];
+    if (
+      used.get(currentSection)?.has(name) &&
+      !info.repeatable &&
+      !options.repeatableOptions.has(name)
+    )
+      return [];
+    let label = `${loose ? "loose-" : ""}${name}`;
+    if (keyMatch[1].includes("_")) label = label.replace(/-/g, "_");
+    const item = new vscode.CompletionItem(
+      label,
+      vscode.CompletionItemKind.Property,
+    );
+    item.range = new vscode.Range(
+      position.line,
+      keyStart,
+      position.line,
+      keyStart + keyMatch[1].length,
+    );
+    item.insertText =
+      equalIndex >= 0 || info.valueType === "flag" ? label : `${label} = `;
+    item.detail = info.valueType;
+    item.documentation = createHoverMarkdown(
+      { type: "option", name: label, label },
+      info,
+      options.target,
+    );
+    if (compatibility?.code === "deprecated-option")
+      item.tags = [vscode.CompletionItemTag.Deprecated];
+    return [item];
+  });
+}
+
+function provideMysqlCnfCodeActions(document, range, context) {
+  const actions = [];
+  for (const diagnostic of context.diagnostics) {
+    if (diagnostic.source !== "mysql-cnf") continue;
+    if (diagnostic.code === "trailing-whitespace") {
+      const action = new vscode.CodeAction(
+        "Remove trailing whitespace",
+        vscode.CodeActionKind.QuickFix,
+      );
+      action.edit = new vscode.WorkspaceEdit();
+      action.edit.delete(document.uri, diagnostic.range);
+      action.diagnostics = [diagnostic];
+      action.isPreferred = true;
+      actions.push(action);
+    }
+    if (diagnostic.code === "duplicate-option") {
+      const action = new vscode.CodeAction(
+        "Review duplicate declarations...",
+        vscode.CodeActionKind.QuickFix,
+      );
+      action.command = {
+        title: action.title,
+        command: "mysqlCnf.reviewDuplicate",
+        arguments: [document.uri, diagnostic.range.start.line],
+      };
+      action.diagnostics = [diagnostic];
+      actions.push(action);
+    }
+  }
+  return actions;
+}
+
+async function reviewDuplicate(uri, lineIndex) {
+  const document = await vscode.workspace.openTextDocument(uri);
+  if (!isMysqlCnfDocument(document)) return;
+  const duplicate = lintDocument(document, getLintOptions(document)).find(
+    (diagnostic) =>
+      diagnostic.code === "duplicate-option" &&
+      diagnostic.range.start.line === lineIndex,
+  );
+  if (!duplicate) return;
+  const first = duplicate.relatedInformation[0].location.range;
+  const version = document.version;
+  await vscode.window.showTextDocument(document, { selection: first });
+  const choice = await vscode.window.showWarningMessage(
+    "Remove the later duplicate declaration?",
+    {
+      modal: true,
+      detail: `First declaration (line ${first.start.line + 1}):\n${document.lineAt(first.start.line).text}\n\nLater declaration (line ${lineIndex + 1}):\n${document.lineAt(lineIndex).text}\n\nThe later value may intentionally override the earlier value. Removing it can change configuration behavior. Included files are not evaluated.`,
+    },
+    "Remove Later Declaration",
+  );
+  if (choice !== "Remove Later Declaration") return;
+  if (document.isClosed || document.version !== version) {
+    vscode.window.showWarningMessage(
+      "The document changed. Review the duplicate again before removing it.",
+    );
+    return;
+  }
+  const line = document.lineAt(lineIndex);
+  const parsed = parseLine(line.text);
+  const edit = new vscode.WorkspaceEdit();
+  if (parsed.comment) edit.replace(document.uri, line.range, parsed.comment);
+  else edit.delete(document.uri, line.rangeIncludingLineBreak);
+  await vscode.workspace.applyEdit(edit);
+}
+
 function updateDiagnostics(document, collection) {
   collection.set(document.uri, lintDocument(document, getLintOptions()));
 }
@@ -483,6 +718,7 @@ function lintDocument(document, options) {
           line.length,
           "Trailing whitespace will be removed by the formatter.",
           vscode.DiagnosticSeverity.Information,
+          "trailing-whitespace",
         ),
       );
     }
@@ -567,6 +803,7 @@ function lintDocument(document, options) {
       seenOptions,
       diagnostics,
       options,
+      document,
     );
   }
 
@@ -596,6 +833,7 @@ function validateOptionLine(
   seenOptions,
   diagnostics,
   options,
+  document,
 ) {
   const keyStart = Math.max(0, line.indexOf(parsed.key));
   const keyEnd = keyStart + parsed.key.length;
@@ -644,15 +882,21 @@ function validateOptionLine(
     firstLine !== undefined &&
     !options.repeatableOptions.has(normalizedOption)
   ) {
-    diagnostics.push(
-      createDiagnostic(
-        lineIndex,
-        keyStart,
-        keyEnd,
-        `Duplicate option '${parsed.key}' in this section. First seen on line ${firstLine + 1}.`,
-        vscode.DiagnosticSeverity.Warning,
-      ),
+    const duplicate = createDiagnostic(
+      lineIndex,
+      keyStart,
+      keyEnd,
+      `Duplicate option '${parsed.key}' in this section. First seen on line ${firstLine + 1}.`,
+      vscode.DiagnosticSeverity.Warning,
+      "duplicate-option",
     );
+    duplicate.relatedInformation = [
+      new vscode.DiagnosticRelatedInformation(
+        new vscode.Location(document.uri, document.lineAt(firstLine).range),
+        "First declaration of this option.",
+      ),
+    ];
+    diagnostics.push(duplicate);
   } else {
     seenOptions.set(seenKey, lineIndex);
   }
@@ -981,4 +1225,7 @@ module.exports = {
   lintDocument,
   parseLine,
   provideMysqlCnfHover,
+  provideMysqlCnfCompletions,
+  provideMysqlCnfCodeActions,
+  reviewDuplicate,
 };

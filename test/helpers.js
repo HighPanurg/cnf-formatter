@@ -37,6 +37,7 @@ function loadExtension(overrides = {}) {
     Range,
     Diagnostic,
     DiagnosticSeverity: { Error: 0, Warning: 1, Information: 2, Hint: 3 },
+    ...require("./vscode-mock"),
     ...overrides,
   };
   const sandbox = {
@@ -53,9 +54,16 @@ function document(text, overrides = {}) {
   const lines = text.split(/\r?\n/);
   return {
     getText: () => text,
+    lineCount: lines.length,
+    version: 1,
+    isClosed: false,
     lineAt: (line) => ({
       text: lines[line],
       range: new Range(line, 0, line, lines[line].length),
+      rangeIncludingLineBreak:
+        line + 1 < lines.length
+          ? new Range(line, 0, line + 1, 0)
+          : new Range(line, 0, line, lines[line].length),
     }),
     positionAt: (offset) => {
       const preceding = text.slice(0, offset).split(/\r?\n/);
