@@ -1289,6 +1289,30 @@ function getDocumentationUrl(name, info, target = {}) {
   );
 }
 
+function isOptionInSection(info, section) {
+  const normalized = section.trim().toLowerCase();
+  const base = [...SECTION_CATALOG.keys()]
+    .sort((left, right) => right.length - left.length)
+    .find(
+      (name) =>
+        normalized === name ||
+        normalized.startsWith(`${name}-`) ||
+        normalized.startsWith(`${name}.`),
+    );
+  if (!base) return true;
+  const groups = info.groups || ["server"];
+  if (base === "client-server")
+    return groups.includes("client") && groups.includes("server");
+  if (["mysqld", "server", "mariadb", "embedded"].includes(base))
+    return groups.includes("server");
+  if (base === "mysqld_safe" || base === "mysql.server")
+    return groups.includes(base);
+  return (
+    groups.includes(base) ||
+    (base.startsWith("mysql") && groups.includes("client"))
+  );
+}
+
 module.exports = {
   SECTION_CATALOG,
   OPTION_CATALOG,
@@ -1296,4 +1320,5 @@ module.exports = {
   getOptionMetadata,
   getCompatibility,
   getDocumentationUrl,
+  isOptionInSection,
 };
