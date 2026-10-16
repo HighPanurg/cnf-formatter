@@ -1009,6 +1009,23 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
     return;
   }
 
+  // Templates remove '{# ... #}' and '<%# ... %>' comments before MySQL reads the file.
+  const templateComment =
+    options.allowTemplatePlaceholders && /(?:\{|<%)$/.test(value);
+  if (parsed.glued && !templateComment) {
+    const lineEnd = line.trimEnd().length;
+    diagnostics.push(
+      createDiagnostic(
+        lineIndex,
+        lineEnd - parsed.comment.length,
+        lineEnd,
+        `MySQL starts a comment at this '#', so the value of '${parsed.key}' ends before it. Quote the value if '#' is part of it.`,
+        vscode.DiagnosticSeverity.Warning,
+        "unquoted-hash",
+      ),
+    );
+  }
+
   if (looksLikeTemplatePlaceholder(value)) {
     if (!options.allowTemplatePlaceholders) {
       diagnostics.push(
@@ -1022,20 +1039,6 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
       );
     }
     return;
-  }
-
-  if (parsed.glued) {
-    const lineEnd = line.trimEnd().length;
-    diagnostics.push(
-      createDiagnostic(
-        lineIndex,
-        lineEnd - parsed.comment.length,
-        lineEnd,
-        `MySQL starts a comment at this '#', so the value of '${parsed.key}' ends before it. Quote the value if '#' is part of it.`,
-        vscode.DiagnosticSeverity.Warning,
-        "unquoted-hash",
-      ),
-    );
   }
 
   // A lone ';' is a plausible literal value, such as a field separator.
@@ -1069,17 +1072,18 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
     return;
   }
 
-  // MySQL expands \b \n \r \s \t in every value, quoted or not.
+  // MySQL expands \\ \b \n \r \s \t in every value, quoted or not, so a UNC
+  // path's leading '\\' always collapses to '\'.
   const escape =
-    /^[A-Za-z]:\\/.test(unquotedValue) &&
-    /[^\\](?:\\\\)*(\\[bnrst])/.exec(unquotedValue);
+    /^(?:[A-Za-z]:\\|\\\\[\w.-]+\\)/.test(unquotedValue) &&
+    /^(\\\\)|[^\\](?:\\\\)*(\\[bnrst])/.exec(unquotedValue);
   if (escape) {
     diagnostics.push(
       createDiagnostic(
         lineIndex,
         valueStart,
         valueEnd,
-        `MySQL reads '${escape[1]}' in this Windows path as an escape sequence. Use forward slashes or double backslashes.`,
+        `MySQL reads '${escape[1] ?? escape[2]}' in this Windows path as an escape sequence. Use forward slashes or double backslashes.`,
         vscode.DiagnosticSeverity.Warning,
         "backslash-escape",
       ),
@@ -1214,13 +1218,15 @@ function parseLine(rawLine) {
     return { type: "unknown", text: trimmed, comment: split.comment };
   }
   if (equalIndex >= 0) {
+    const value = main.slice(equalIndex + 1).trim();
     return {
       type: "option",
       key: main.slice(0, equalIndex).trim(),
-      value: main.slice(equalIndex + 1).trim(),
+      value,
       hasEquals: true,
       comment: split.comment,
-      glued: split.glued,
+      // A '#' right after a fully quoted value is clearly a separate comment.
+      glued: split.glued && stripMatchingQuotes(value) === value,
     };
   }
 
@@ -1250,7 +1256,7 @@ function splitInlineComment(text) {
         main: text.slice(0, index).trimEnd(),
         comment: text.slice(index).trim(),
         // A '#' glued to a value was probably meant to be part of it.
-        glued: /[^\s'"]/.test(text[index - 1] ?? " "),
+        glued: /\S/.test(text[index - 1] ?? " "),
       };
     }
     // Backslashes escape only inside quotes.

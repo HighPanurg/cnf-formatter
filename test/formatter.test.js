@@ -136,6 +136,7 @@ test("comments follow MySQL: unquoted # anywhere, ; only at line start", () => {
   for (const [input, output] of [
     ["password = abc ;def", "password = abc ;def"],
     ["password=abc#123", "password = abc#123"],
+    ['token=abc"def"#123', 'token = abc"def"#123'],
     ["password='abc'#note", "password = 'abc'".padEnd(48) + "# note"],
   ]) {
     const formatted = formatText(`[client]\n${input}`, formatOptions);
@@ -167,6 +168,9 @@ test("lint flags values MySQL reads differently than written", () => {
   for (const [line, expected] of [
     ["password=abc#123", "unquoted-hash"],
     ["password='abc'#note", ""],
+    ['token=abc"def"#123', "unquoted-hash"],
+    ["password={{ db_password }}#123", "unquoted-hash"],
+    ["server-id = {{ id }} {# note #}", ""],
     ["log-error = /tmp/x.err ; old", "inline-semicolon"],
     ["log-error = ; old", "inline-semicolon"],
     ["fields-terminated-by = ;", ""],
@@ -176,6 +180,10 @@ test("lint flags values MySQL reads differently than written", () => {
     ['basedir = "C:\\temp"', "backslash-escape"],
     ["basedir = C:\\\\mysql\\\\bin", ""],
     ["basedir = C:\\ProgramData\\MySQL", ""],
+    ["datadir = \\\\server\\temp\\data", "backslash-escape"],
+    ["tmpdir = \\\\fileserver\\mysql\\data", "backslash-escape"],
+    ["log-error = \\\\\\\\server\\\\share\\\\x.err", ""],
+    ["lines-terminated-by = \\r\\n", ""],
     ["!include /etc/mysql/a.cnf # note", "include-comment"],
     ["!INCLUDE /etc/mysql/a.cnf", "unknown-directive"],
     ["! include /etc/mysql/a.cnf", ""],
