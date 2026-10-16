@@ -126,3 +126,59 @@ test("lint handles templates, empty values and repeated sections", () => {
     0,
   );
 });
+
+test("comments follow MySQL: unquoted # anywhere, ; only at line start", () => {
+  const hash = parseLine("password=abc#123");
+  assert.equal(hash.value, "abc");
+  assert.equal(hash.comment, "#123");
+  assert.equal(parseLine('password="abc#123"').value, '"abc#123"');
+  assert.equal(parseLine("password = abc ;def").value, "abc ;def");
+  for (const [input, output] of [
+    ["password = abc ;def", "password = abc ;def"],
+    ["password=abc#123", "password = abc#123"],
+    ["password='abc'#note", "password = 'abc'".padEnd(48) + "# note"],
+  ]) {
+    const formatted = formatText(`[client]\n${input}`, formatOptions);
+    assert.equal(formatted, `[client]\n${output}\n`);
+    assert.equal(formatText(formatted, formatOptions), formatted);
+  }
+  assert.equal(
+    formatText("!include /a.cnf # note", formatOptions),
+    "!include /a.cnf # note\n",
+  );
+  for (const line of ["[mysqld]#main", "[mysqld] ; main"]) {
+    assert.equal(parseLine(line).type, "section");
+    assert.equal(lintDocument(document(line), lintOptions).length, 0);
+  }
+});
+
+test("lint flags values MySQL reads differently than written", () => {
+  const codes = (line) =>
+    lintDocument(document(`[mysqld]\n${line}`), lintOptions)
+      .map((item) => item.code)
+      .join(" ");
+  for (const [line, expected] of [
+    ["password=abc#123", "unquoted-hash"],
+    ["password='abc'#note", ""],
+    ["log-error = /tmp/x.err ; old", "inline-semicolon"],
+    ["init_connect = 'SET NAMES utf8mb4 # c", "unbalanced-quote"],
+    ["basedir = C:\\mysql\\bin", "backslash-escape"],
+    ['basedir = "C:\\temp"', "backslash-escape"],
+    ["basedir = C:\\\\mysql\\\\bin", ""],
+    ["basedir = C:\\ProgramData\\MySQL", ""],
+    ["!include /etc/mysql/a.cnf # note", "include-comment"],
+    ["!INCLUDE /etc/mysql/a.cnf", "unknown-directive"],
+    ["! include /etc/mysql/a.cnf", ""],
+  ]) {
+    assert.equal(codes(line), expected, line);
+  }
+});
+
+test("yes/no are not booleans and fatal MySQL errors are errors", () => {
+  const lint = (text) => lintDocument(document(text), lintOptions);
+  assert.match(lint("[mysqld]\nslow_query_log = yes")[0].message, /ON, OFF/);
+  assert.equal(lint("[mysqld]\nslow_query_log = TRUE").length, 0);
+  for (const text of ["port = 3306\n[mysqld]", "[mysqld]\n!include"]) {
+    assert.equal(lint(text)[0].severity, 0);
+  }
+});

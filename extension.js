@@ -291,7 +291,10 @@ function formatOptionBlock(block, options) {
       base = item.key;
     }
 
-    return { base, comment: item.comment };
+    // Keep a glued '#' verbatim so the user can still see what they meant to write.
+    return item.glued
+      ? { base: base + item.comment }
+      : { base, comment: item.comment };
   });
 
   const inlineCommentColumn =
@@ -838,15 +841,38 @@ function lintDocument(document, options) {
 }
 
 function validateIncludeDirective(parsed, line, lineIndex, diagnostics) {
-  const parts = parsed.main.trim().split(/\s+/);
-  if (parts.length < 2) {
+  // MySQL matches these keywords case-sensitively and silently skips other "!" lines.
+  const match = /^!\s*(?:include|includedir)(\s+.*)?$/.exec(parsed.main);
+  if (!match) {
+    diagnostics.push(
+      createDiagnostic(
+        lineIndex,
+        firstNonWhitespaceIndex(line),
+        line.length,
+        "MySQL ignores this line: only lowercase !include and !includedir directives are recognized.",
+        vscode.DiagnosticSeverity.Warning,
+        "unknown-directive",
+      ),
+    );
+  } else if (!match[1]) {
     diagnostics.push(
       createDiagnostic(
         lineIndex,
         firstNonWhitespaceIndex(line),
         line.length,
         "Include directives require a path.",
+        vscode.DiagnosticSeverity.Error,
+      ),
+    );
+  } else if (/\s[#;]/.test(match[1])) {
+    diagnostics.push(
+      createDiagnostic(
+        lineIndex,
+        line.search(/\s[#;]/) + 1,
+        line.trimEnd().length,
+        "Include lines cannot have comments: MySQL reads this text as part of the path.",
         vscode.DiagnosticSeverity.Warning,
+        "include-comment",
       ),
     );
   }
@@ -872,7 +898,7 @@ function validateOptionLine(
         keyStart,
         keyEnd,
         "Option appears before any section header.",
-        vscode.DiagnosticSeverity.Warning,
+        vscode.DiagnosticSeverity.Error,
       ),
     );
   }
@@ -896,7 +922,9 @@ function validateOptionLine(
         lineIndex,
         keyStart,
         keyEnd,
-        "Option names cannot contain whitespace.",
+        /\s;/.test(parsed.key)
+          ? "';' starts a comment only at the beginning of a line. Use '#' for inline comments."
+          : "Option names cannot contain whitespace.",
         vscode.DiagnosticSeverity.Error,
       ),
     );
@@ -982,17 +1010,76 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
     return;
   }
 
+  if (parsed.glued) {
+    const lineEnd = line.trimEnd().length;
+    diagnostics.push(
+      createDiagnostic(
+        lineIndex,
+        lineEnd - parsed.comment.length,
+        lineEnd,
+        `MySQL starts a comment at this '#', so the value of '${parsed.key}' ends before it. Quote the value if '#' is part of it.`,
+        vscode.DiagnosticSeverity.Warning,
+        "unquoted-hash",
+      ),
+    );
+  }
+
+  const semicolonIndex = /^['"]/.test(value) ? -1 : value.search(/\s;/);
+  if (semicolonIndex >= 0) {
+    diagnostics.push(
+      createDiagnostic(
+        lineIndex,
+        valueStart + semicolonIndex + 1,
+        valueEnd,
+        `';' starts a comment only at the beginning of a line, so MySQL keeps it in the value of '${parsed.key}'. Use '#' for inline comments.`,
+        vscode.DiagnosticSeverity.Warning,
+        "inline-semicolon",
+      ),
+    );
+  }
+
   const unquotedValue = stripMatchingQuotes(value);
+  if (/^['"]/.test(value) && unquotedValue === value) {
+    diagnostics.push(
+      createDiagnostic(
+        lineIndex,
+        valueStart,
+        valueEnd,
+        `Unbalanced quotes in the value of '${parsed.key}': MySQL keeps the quote characters, and '#' inside an open quote does not start a comment.`,
+        vscode.DiagnosticSeverity.Warning,
+        "unbalanced-quote",
+      ),
+    );
+    return;
+  }
+
+  // MySQL expands \b \n \r \s \t in every value, quoted or not.
+  const escape =
+    /^[A-Za-z]:\\/.test(unquotedValue) &&
+    /[^\\](?:\\\\)*(\\[bnrst])/.exec(unquotedValue);
+  if (escape) {
+    diagnostics.push(
+      createDiagnostic(
+        lineIndex,
+        valueStart,
+        valueEnd,
+        `MySQL reads '${escape[1]}' in this Windows path as an escape sequence. Use forward slashes or double backslashes.`,
+        vscode.DiagnosticSeverity.Warning,
+        "backslash-escape",
+      ),
+    );
+  }
+
   if (
     info?.type === "boolean" &&
-    !/^(0|1|on|off|true|false|yes|no)$/i.test(unquotedValue)
+    !/^(0|1|on|off|true|false)$/i.test(unquotedValue)
   ) {
     diagnostics.push(
       createDiagnostic(
         lineIndex,
         valueStart,
         valueEnd,
-        `Option '${parsed.key}' usually expects a boolean value such as ON or OFF.`,
+        `Option '${parsed.key}' expects ON, OFF, TRUE, FALSE, 1, or 0. MySQL may silently ignore or misread other values.`,
         vscode.DiagnosticSeverity.Warning,
       ),
     );
@@ -1080,24 +1167,26 @@ function parseLine(rawLine) {
     return { type: "comment", comment: trimmed };
   }
 
+  // MySQL reads directive lines verbatim, so they cannot carry comments.
+  if (trimmed.startsWith("!")) {
+    return { type: "include", main: trimmed };
+  }
+
+  // MySQL ignores everything after the closing bracket of a group header.
+  const sectionMatch = /^\[\s*([^\]]+?)\s*\]\s*([#;].*)?$/.exec(trimmed);
+  if (sectionMatch) {
+    return {
+      type: "section",
+      name: sectionMatch[1].trim(),
+      comment: sectionMatch[2] || "",
+    };
+  }
+
   const split = splitInlineComment(trimmedRight);
   const main = split.main.trim();
 
   if (!main && split.comment) {
     return { type: "comment", comment: split.comment };
-  }
-
-  if (/^!include(?:dir)?\b/i.test(main)) {
-    return { type: "include", main, comment: split.comment };
-  }
-
-  const sectionMatch = /^\[\s*([^\]]+?)\s*\]$/.exec(main);
-  if (sectionMatch) {
-    return {
-      type: "section",
-      name: sectionMatch[1].trim(),
-      comment: split.comment,
-    };
   }
 
   if (main.startsWith("[")) {
@@ -1115,6 +1204,7 @@ function parseLine(rawLine) {
       value: main.slice(equalIndex + 1).trim(),
       hasEquals: true,
       comment: split.comment,
+      glued: split.glued,
     };
   }
 
@@ -1124,31 +1214,31 @@ function parseLine(rawLine) {
     value: "",
     hasEquals: false,
     comment: split.comment,
+    glued: split.glued,
   };
 }
 
+// Mirrors MySQL's remove_end_comment(): an unquoted '#' starts a comment even
+// without a space before it, and an inline ';' is part of the value.
 function splitInlineComment(text) {
   let quote = "";
+  let escaped = false;
 
   for (let index = 0; index < text.length; index += 1) {
     const character = text[index];
-    const previous = index > 0 ? text[index - 1] : "";
 
-    if ((character === "'" || character === '"') && !isEscaped(text, index)) {
+    if ((character === "'" || character === '"') && !escaped) {
       quote = quote === character ? "" : quote || character;
-      continue;
-    }
-
-    if (
-      !quote &&
-      (character === "#" || character === ";") &&
-      (index === 0 || /\s/.test(previous))
-    ) {
+    } else if (!quote && character === "#") {
       return {
         main: text.slice(0, index).trimEnd(),
         comment: text.slice(index).trim(),
+        // A '#' glued to a value was probably meant to be part of it.
+        glued: /[^\s'"]/.test(text[index - 1] ?? " "),
       };
     }
+    // Backslashes escape only inside quotes.
+    escaped = Boolean(quote) && character === "\\" && !escaped;
   }
 
   return { main: text.trimEnd(), comment: "" };
