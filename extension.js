@@ -802,6 +802,20 @@ function lintDocument(document, options) {
         );
       }
 
+      if (parsed.comment && !/^[#;]/.test(parsed.comment)) {
+        const lineEnd = line.trimEnd().length;
+        diagnostics.push(
+          createDiagnostic(
+            lineIndex,
+            lineEnd - parsed.comment.length,
+            lineEnd,
+            "MySQL ignores everything after ']' on a group line. Use '#' for a comment and put options on their own line.",
+            vscode.DiagnosticSeverity.Warning,
+            "text-after-section",
+          ),
+        );
+      }
+
       continue;
     }
 
@@ -1024,12 +1038,14 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
     );
   }
 
-  const semicolonIndex = /^['"]/.test(value) ? -1 : value.search(/\s;/);
+  // A lone ';' is a plausible literal value, such as a field separator.
+  const semicolonIndex =
+    /^['"]/.test(value) || value === ";" ? -1 : value.search(/(?<=^|\s);/);
   if (semicolonIndex >= 0) {
     diagnostics.push(
       createDiagnostic(
         lineIndex,
-        valueStart + semicolonIndex + 1,
+        valueStart + semicolonIndex,
         valueEnd,
         `';' starts a comment only at the beginning of a line, so MySQL keeps it in the value of '${parsed.key}'. Use '#' for inline comments.`,
         vscode.DiagnosticSeverity.Warning,
@@ -1173,12 +1189,12 @@ function parseLine(rawLine) {
   }
 
   // MySQL ignores everything after the closing bracket of a group header.
-  const sectionMatch = /^\[\s*([^\]]+?)\s*\]\s*([#;].*)?$/.exec(trimmed);
+  const sectionMatch = /^\[\s*([^\]]+?)\s*\](.*)$/.exec(trimmed);
   if (sectionMatch) {
     return {
       type: "section",
       name: sectionMatch[1].trim(),
-      comment: sectionMatch[2] || "",
+      comment: sectionMatch[2].trim(),
     };
   }
 

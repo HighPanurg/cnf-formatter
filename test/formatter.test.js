@@ -150,6 +150,13 @@ test("comments follow MySQL: unquoted # anywhere, ; only at line start", () => {
     assert.equal(parseLine(line).type, "section");
     assert.equal(lintDocument(document(line), lintOptions).length, 0);
   }
+  // Text after ']' is ignored by MySQL; the group still applies to later lines.
+  assert.equal(
+    lintDocument(document("[mysqld] main settings\nport = 3306"), lintOptions)
+      .map((item) => item.code)
+      .join(" "),
+    "text-after-section",
+  );
 });
 
 test("lint flags values MySQL reads differently than written", () => {
@@ -161,6 +168,9 @@ test("lint flags values MySQL reads differently than written", () => {
     ["password=abc#123", "unquoted-hash"],
     ["password='abc'#note", ""],
     ["log-error = /tmp/x.err ; old", "inline-semicolon"],
+    ["log-error = ; old", "inline-semicolon"],
+    ["fields-terminated-by = ;", ""],
+    ["[client] port=3306", "text-after-section"],
     ["init_connect = 'SET NAMES utf8mb4 # c", "unbalanced-quote"],
     ["basedir = C:\\mysql\\bin", "backslash-escape"],
     ['basedir = "C:\\temp"', "backslash-escape"],
@@ -172,6 +182,11 @@ test("lint flags values MySQL reads differently than written", () => {
   ]) {
     assert.equal(codes(line), expected, line);
   }
+  const [semicolon] = lintDocument(
+    document("[mysqld]\nlog-error = ; old"),
+    lintOptions,
+  );
+  assert.equal(semicolon.range.start.character, 12);
 });
 
 test("yes/no are not booleans and fatal MySQL errors are errors", () => {
