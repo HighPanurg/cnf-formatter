@@ -178,6 +178,9 @@ test("lint flags values MySQL reads differently than written", () => {
     ["token=abc<%#123", "unquoted-hash"],
     ["log-error = /tmp/x.err ; old", "inline-semicolon"],
     ["log-error = ; old", "inline-semicolon"],
+    ["init-connect=SET @label='left ; right'", ""],
+    ["init-connect=SET @a='it\\'s ; fine'", ""],
+    ["init-connect=SET @a='x ; y' ; old", "inline-semicolon"],
     ["fields-terminated-by = ;", ""],
     ["[client] port=3306", "text-after-section"],
     ["init_connect = 'SET NAMES utf8mb4 # c", "unbalanced-quote"],
@@ -197,11 +200,13 @@ test("lint flags values MySQL reads differently than written", () => {
   ]) {
     assert.equal(codes(line), expected, line);
   }
-  const [semicolon] = lintDocument(
-    document("[mysqld]\nlog-error = ; old"),
-    lintOptions,
-  );
-  assert.equal(semicolon.range.start.character, 12);
+  for (const [line, character] of [
+    ["log-error = ; old", 12],
+    ["init-connect=SET @a='x ; y' ; old", 28],
+  ]) {
+    const [semicolon] = lintDocument(document(`[mysqld]\n${line}`), lintOptions);
+    assert.equal(semicolon.range.start.character, character, line);
+  }
 });
 
 test("yes/no are not booleans and fatal MySQL errors are errors", () => {

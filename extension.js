@@ -1053,7 +1053,13 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
 
   // A lone ';' is a plausible literal value, such as a field separator.
   const semicolonIndex =
-    /^['"]/.test(value) || value === ";" ? -1 : value.search(/(?<=^|\s);/);
+    value === ";"
+      ? -1
+      : findUnquoted(
+          value,
+          (character, index) =>
+            character === ";" && /\s/.test(value[index - 1] ?? " "),
+        );
   if (semicolonIndex >= 0) {
     diagnostics.push(
       createDiagnostic(
@@ -1253,6 +1259,22 @@ function parseLine(rawLine) {
 // Mirrors MySQL's remove_end_comment(): an unquoted '#' starts a comment even
 // without a space before it, and an inline ';' is part of the value.
 function splitInlineComment(text) {
+  const index = findUnquoted(text, (character) => character === "#");
+  if (index < 0) {
+    return { main: text.trimEnd(), comment: "" };
+  }
+
+  return {
+    main: text.slice(0, index).trimEnd(),
+    comment: text.slice(index).trim(),
+    // A '#' glued to a value was probably meant to be part of it.
+    glued: /\S/.test(text[index - 1] ?? " "),
+  };
+}
+
+// Index of the first character outside quotes that satisfies `match`, tracking
+// quotes like MySQL: backslashes escape only inside quotes.
+function findUnquoted(text, match) {
   let quote = "";
   let escaped = false;
 
@@ -1261,19 +1283,13 @@ function splitInlineComment(text) {
 
     if ((character === "'" || character === '"') && !escaped) {
       quote = quote === character ? "" : quote || character;
-    } else if (!quote && character === "#") {
-      return {
-        main: text.slice(0, index).trimEnd(),
-        comment: text.slice(index).trim(),
-        // A '#' glued to a value was probably meant to be part of it.
-        glued: /\S/.test(text[index - 1] ?? " "),
-      };
+    } else if (!quote && match(character, index)) {
+      return index;
     }
-    // Backslashes escape only inside quotes.
     escaped = Boolean(quote) && character === "\\" && !escaped;
   }
 
-  return { main: text.trimEnd(), comment: "" };
+  return -1;
 }
 
 function findUnquotedEqual(text) {
