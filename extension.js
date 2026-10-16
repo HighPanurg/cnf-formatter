@@ -1026,7 +1026,12 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
     );
   }
 
-  if (looksLikeTemplatePlaceholder(value)) {
+  // Splitting at '#' cuts an EJS/ERB '<%# ... %>' comment in half; rejoin it for this check.
+  if (
+    looksLikeTemplatePlaceholder(
+      parsed.glued && /<%$/.test(value) ? value + parsed.comment : value,
+    )
+  ) {
     if (!options.allowTemplatePlaceholders) {
       diagnostics.push(
         createDiagnostic(

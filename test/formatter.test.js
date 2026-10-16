@@ -171,6 +171,7 @@ test("lint flags values MySQL reads differently than written", () => {
     ['token=abc"def"#123', "unquoted-hash"],
     ["password={{ db_password }}#123", "unquoted-hash"],
     ["server-id = {{ id }} {# note #}", ""],
+    ["server-id=123 <%# note %>", ""],
     ["log-error = /tmp/x.err ; old", "inline-semicolon"],
     ["log-error = ; old", "inline-semicolon"],
     ["fields-terminated-by = ;", ""],
