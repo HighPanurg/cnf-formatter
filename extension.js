@@ -1009,22 +1009,25 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
     return;
   }
 
-  // Splitting at '#' cuts a complete '{# ... #}' or '<%# ... %>' template comment
-  // in half; templates remove those before MySQL reads the file.
-  const templateComment =
-    parsed.glued &&
-    ((/\{$/.test(value) && /^#[\s\S]*#\}/.test(parsed.comment)) ||
-      (/<%$/.test(value) && parsed.comment.includes("%>")));
+  // Template comments vanish when the template renders, along with any '#'
+  // inside them; MySQL then starts a comment at the first '#' that remains.
+  const isHash = (character) => character === "#";
+  const rendered = maskTemplateComments(line);
+  const scanned = options.allowTemplatePlaceholders ? rendered : line;
+  const hashIndex = findUnquoted(scanned, isHash);
+  const beforeHash = scanned
+    .slice(equalIndex + 1, hashIndex)
+    .replace(/\0/g, "");
   if (
-    parsed.glued &&
-    !(templateComment && options.allowTemplatePlaceholders)
+    hashIndex >= 0 &&
+    /\S$/.test(beforeHash) &&
+    stripMatchingQuotes(beforeHash.trim()) === beforeHash.trim()
   ) {
-    const lineEnd = line.trimEnd().length;
     diagnostics.push(
       createDiagnostic(
         lineIndex,
-        lineEnd - parsed.comment.length,
-        lineEnd,
+        hashIndex,
+        line.trimEnd().length,
         `MySQL starts a comment at this '#', so the value of '${parsed.key}' ends before it. Quote the value if '#' is part of it.`,
         vscode.DiagnosticSeverity.Warning,
         "unquoted-hash",
@@ -1032,9 +1035,10 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
     );
   }
 
+  const renderedHash = findUnquoted(rendered, isHash);
   if (
     looksLikeTemplatePlaceholder(
-      templateComment ? value + parsed.comment : value,
+      line.slice(equalIndex + 1, renderedHash < 0 ? undefined : renderedHash),
     )
   ) {
     if (!options.allowTemplatePlaceholders) {
@@ -1091,7 +1095,7 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
   // MySQL expands \\ \b \n \r \s \t in every value, quoted or not, so an
   // unescaped UNC prefix '\\' collapses to '\'.
   const escape =
-    /^(?:[A-Za-z]:\\|\\\\(?:\\\\)?[\w.-]+\\)/.test(unquotedValue) &&
+    /^(?:[A-Za-z]:[\\/]|\\\\(?:\\\\)?[\w.-]+\\)/.test(unquotedValue) &&
     /^(\\\\)(?!\\)|[^\\](?:\\\\)*(\\[bnrst])/.exec(unquotedValue);
   if (escape) {
     diagnostics.push(
@@ -1337,6 +1341,14 @@ function isKnownSection(sectionName, allowedSections) {
   }
 
   return /^(mysqld|mysql|mariadb|client|server)[-.].+/.test(sectionName);
+}
+
+// Blanks out '{# ... #}' and '<%# ... %>' template comments; NUL characters
+// keep the original offsets.
+function maskTemplateComments(text) {
+  return text.replace(/\{#[\s\S]*?#\}|<%#[\s\S]*?%>/g, (span) =>
+    "\0".repeat(span.length),
+  );
 }
 
 function looksLikeTemplatePlaceholder(value) {

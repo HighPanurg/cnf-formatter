@@ -176,6 +176,9 @@ test("lint flags values MySQL reads differently than written", () => {
     ["server-id = {# note #}{{ server_id }}", ""],
     ["token=abc{#123", "unquoted-hash"],
     ["token=abc<%#123", "unquoted-hash"],
+    ["token=abc{# note #}#123", "unquoted-hash"],
+    ["token=abc<%# note %>#123", "unquoted-hash"],
+    ["token=abc{# note #} #123", ""],
     ["log-error = /tmp/x.err ; old", "inline-semicolon"],
     ["log-error = ; old", "inline-semicolon"],
     ["init-connect=SET @label='left ; right'", ""],
@@ -188,6 +191,7 @@ test("lint flags values MySQL reads differently than written", () => {
     ['basedir = "C:\\temp"', "backslash-escape"],
     ["basedir = C:\\\\mysql\\\\bin", ""],
     ["basedir = C:\\ProgramData\\MySQL", ""],
+    ["basedir = C:/mysql\\bin", "backslash-escape"],
     ["datadir = \\\\server\\temp\\data", "backslash-escape"],
     ["tmpdir = \\\\fileserver\\mysql\\data", "backslash-escape"],
     ["datadir = \\\\\\\\server\\temp\\data", "backslash-escape"],
@@ -203,9 +207,10 @@ test("lint flags values MySQL reads differently than written", () => {
   for (const [line, character] of [
     ["log-error = ; old", 12],
     ["init-connect=SET @a='x ; y' ; old", 28],
+    ["token=abc{# note #}#123", 19],
   ]) {
-    const [semicolon] = lintDocument(document(`[mysqld]\n${line}`), lintOptions);
-    assert.equal(semicolon.range.start.character, character, line);
+    const [diagnostic] = lintDocument(document(`[mysqld]\n${line}`), lintOptions);
+    assert.equal(diagnostic.range.start.character, character, line);
   }
 });
 
