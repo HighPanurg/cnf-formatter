@@ -1009,10 +1009,16 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
     return;
   }
 
-  // Templates remove '{# ... #}' and '<%# ... %>' comments before MySQL reads the file.
+  // Splitting at '#' cuts a complete '{# ... #}' or '<%# ... %>' template comment
+  // in half; templates remove those before MySQL reads the file.
   const templateComment =
-    options.allowTemplatePlaceholders && /(?:\{|<%)$/.test(value);
-  if (parsed.glued && !templateComment) {
+    parsed.glued &&
+    ((/\{$/.test(value) && /^#[\s\S]*#\}/.test(parsed.comment)) ||
+      (/<%$/.test(value) && parsed.comment.includes("%>")));
+  if (
+    parsed.glued &&
+    !(templateComment && options.allowTemplatePlaceholders)
+  ) {
     const lineEnd = line.trimEnd().length;
     diagnostics.push(
       createDiagnostic(
@@ -1026,10 +1032,9 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
     );
   }
 
-  // Splitting at '#' cuts an EJS/ERB '<%# ... %>' comment in half; rejoin it for this check.
   if (
     looksLikeTemplatePlaceholder(
-      parsed.glued && /<%$/.test(value) ? value + parsed.comment : value,
+      templateComment ? value + parsed.comment : value,
     )
   ) {
     if (!options.allowTemplatePlaceholders) {
@@ -1077,11 +1082,11 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
     return;
   }
 
-  // MySQL expands \\ \b \n \r \s \t in every value, quoted or not, so a UNC
-  // path's leading '\\' always collapses to '\'.
+  // MySQL expands \\ \b \n \r \s \t in every value, quoted or not, so an
+  // unescaped UNC prefix '\\' collapses to '\'.
   const escape =
-    /^(?:[A-Za-z]:\\|\\\\[\w.-]+\\)/.test(unquotedValue) &&
-    /^(\\\\)|[^\\](?:\\\\)*(\\[bnrst])/.exec(unquotedValue);
+    /^(?:[A-Za-z]:\\|\\\\(?:\\\\)?[\w.-]+\\)/.test(unquotedValue) &&
+    /^(\\\\)(?!\\)|[^\\](?:\\\\)*(\\[bnrst])/.exec(unquotedValue);
   if (escape) {
     diagnostics.push(
       createDiagnostic(
@@ -1319,7 +1324,7 @@ function isKnownSection(sectionName, allowedSections) {
 }
 
 function looksLikeTemplatePlaceholder(value) {
-  return /{{\s*[^}]+\s*}}|<%[=-]?[\s\S]*?%>/.test(value);
+  return /{{\s*[^}]+\s*}}|{#[\s\S]*?#}|<%[=-]?[\s\S]*?%>/.test(value);
 }
 
 function stripMatchingQuotes(value) {
