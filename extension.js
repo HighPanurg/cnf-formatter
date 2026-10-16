@@ -1009,10 +1009,10 @@ function validateOptionValue(parsed, line, lineIndex, diagnostics, options) {
     return;
   }
 
-  // Template comments vanish when the template renders, along with any '#'
-  // inside them; MySQL then starts a comment at the first '#' that remains.
+  // Quotes and '#' inside template tags never reach MySQL; it starts a comment
+  // at the first '#' outside them once the template renders.
   const isHash = (character) => character === "#";
-  const rendered = maskTemplateComments(line);
+  const rendered = maskTemplates(line);
   const scanned = options.allowTemplatePlaceholders ? rendered : line;
   const hashIndex = findUnquoted(scanned, isHash);
   const beforeHash = scanned
@@ -1343,11 +1343,12 @@ function isKnownSection(sectionName, allowedSections) {
   return /^(mysqld|mysql|mariadb|client|server)[-.].+/.test(sectionName);
 }
 
-// Blanks out '{# ... #}' and '<%# ... %>' template comments; NUL characters
-// keep the original offsets.
-function maskTemplateComments(text) {
-  return text.replace(/\{#[\s\S]*?#\}|<%#[\s\S]*?%>/g, (span) =>
-    "\0".repeat(span.length),
+// Blanks out template tags while keeping offsets: comments render to nothing
+// (NUL, stripped before glue checks), other tags to some value (\x01).
+function maskTemplates(text) {
+  return text.replace(
+    /(\{#[\s\S]*?#\}|<%#[\s\S]*?%>)|\{\{[\s\S]*?\}\}|<%[\s\S]*?%>/g,
+    (span, comment) => (comment ? "\0" : "\x01").repeat(span.length),
   );
 }
 

@@ -53,7 +53,7 @@
     {
       "name": "string.quoted.single.mysql-cnf",
       "begin": "'",
-      "end": "'",
+      "end": "'|$",
       "patterns": [
         {
           "name": "constant.character.escape.mysql-cnf",
@@ -64,7 +64,7 @@
     {
       "name": "string.quoted.double.mysql-cnf",
       "begin": "\"",
-      "end": "\"",
+      "end": "\"|$",
       "patterns": [
         {
           "name": "constant.character.escape.mysql-cnf",
