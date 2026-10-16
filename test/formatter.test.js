@@ -137,6 +137,10 @@ test("comments follow MySQL: unquoted # anywhere, ; only at line start", () => {
     ["password = abc ;def", "password = abc ;def"],
     ["password=abc#123", "password = abc#123"],
     ['token=abc"def"#123', 'token = abc"def"#123'],
+    [
+      'password="{{ password | default("#123") }}"',
+      'password = "{{ password | default("#123") }}"',
+    ],
     ["password='abc'#note", "password = 'abc'".padEnd(48) + "# note"],
   ]) {
     const formatted = formatText(`[client]\n${input}`, formatOptions);

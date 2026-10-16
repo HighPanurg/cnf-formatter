@@ -1263,7 +1263,11 @@ function parseLine(rawLine) {
 // Mirrors MySQL's remove_end_comment(): an unquoted '#' starts a comment even
 // without a space before it, and an inline ';' is part of the value.
 function splitInlineComment(text) {
-  const index = findUnquoted(text, (character) => character === "#");
+  // A '#' or quote inside a template tag is not CNF syntax; never split there.
+  const index = findUnquoted(
+    maskTemplates(text),
+    (character) => character === "#",
+  );
   if (index < 0) {
     return { main: text.trimEnd(), comment: "" };
   }
