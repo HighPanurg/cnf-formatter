@@ -7,6 +7,7 @@ VS Code extension for `my.cnf` and other MySQL option files.
 - Registers a `mysql-cnf` language for `.cnf`, `my.cnf`, and `my.ini` files.
 - Formats option files with normalized comments, section headers, spacing, and aligned `=` signs across blank- or comment-separated option groups.
 - Lints malformed sections, unparsable option lines, duplicate non-repeatable options, tabs, trailing whitespace, missing include paths, unknown option groups, and common boolean, integer, and size values.
+- Parses comments the way MySQL does: an unquoted `#` starts a comment anywhere, `;` only at the start of a line, `!include` lines take no comments, and text after a group's `]` is ignored. Warns where this silently changes a value: unquoted `#`, inline `;`, unbalanced quotes, escapes such as `\b` or `\t` in Windows drive and UNC paths, unrecognized `!` directives, and text after a group's `]` that is not a `#` or `;` comment. Options before the first group and `!include` without a path are errors, because MySQL refuses to load such files.
 - Uses a shared option catalog for hover descriptions, enum and range checks, completions, and selected MySQL/MariaDB compatibility warnings.
 - Suggests section names, section-aware option names, and boolean or enum values. Preserves underscore spelling, existing assignments, quotes, and inline comments.
 - Links hover documentation to official MySQL or MariaDB documentation and marks known deprecated options.

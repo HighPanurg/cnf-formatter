@@ -5,7 +5,7 @@
   "patterns": [
     {
       "name": "comment.line.number-sign.mysql-cnf",
-      "match": "(^|\\s)#.*$"
+      "match": "#.*$"
     },
     {
       "name": "comment.line.semicolon.mysql-cnf",
@@ -48,17 +48,29 @@
     },
     {
       "name": "constant.language.boolean.mysql-cnf",
-      "match": "\\b(?i:on|off|true|false|yes|no)\\b"
+      "match": "\\b(?i:on|off|true|false)\\b"
     },
     {
       "name": "string.quoted.single.mysql-cnf",
       "begin": "'",
-      "end": "'"
+      "end": "'|$",
+      "patterns": [
+        {
+          "name": "constant.character.escape.mysql-cnf",
+          "match": "\\\\."
+        }
+      ]
     },
     {
       "name": "string.quoted.double.mysql-cnf",
       "begin": "\"",
-      "end": "\""
+      "end": "\"|$",
+      "patterns": [
+        {
+          "name": "constant.character.escape.mysql-cnf",
+          "match": "\\\\."
+        }
+      ]
     }
   ]
 }
